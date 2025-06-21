@@ -5,6 +5,8 @@ import GoodsModel from './models/goods.js';
 import GoodsTypesModel from './models/goodsTypes.js';
 import CartsModel from './models/carts.js';
 
+import { Convert } from 'easy-currencies';
+
 // для файлов
 import multer from 'multer';
 
@@ -237,9 +239,33 @@ app.get('/api/user_get_goodsstype', async (req, res) => {
 //получить все товары
 app.get('/api/user_get_goods', async (req, res) => {
   try {
-    const goods = await GoodsModel.find();
+    // const goods = await GoodsModel.find();
 
-    return res.json(goods);
+    const goods = await GoodsModel.find().lean();
+
+    const user = await UserModel.findOne({ tlgid: req.query.tlgid });
+    const userValute = user.valute;
+
+    // $ € ₽
+
+    //FIXME: создать функцию по запросу стоимости валют
+    // const EXCHANGE_RATES = {
+    //   '€': 1,
+    //   '$': 1.07,
+    //   '₽': 100
+    // };
+
+    const exchangeRates = await currencyConverter();
+
+    const newGoods = goods.map((good) => ({
+      ...good,
+      valuteToShow: userValute,
+      priceToShow: parseFloat(
+        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+      ),
+    }));
+
+    return res.json(newGoods);
   } catch (err) {
     console.log(err);
   }
@@ -248,9 +274,28 @@ app.get('/api/user_get_goods', async (req, res) => {
 //получить товар по id
 app.get('/api/user_get_currentgood', async (req, res) => {
   try {
-    const good = await GoodsModel.findById(req.query.id);
+    const good = await GoodsModel.findById(req.query.id).lean();
 
-    return res.json(good);
+    // const goods = await GoodsModel.find().lean();
+
+    const user = await UserModel.findOne({ tlgid: req.query.tlgid });
+    const userValute = user.valute;
+
+
+    const exchangeRates = await currencyConverter();
+
+    const newGood = {
+      ...good,
+      valuteToShow: userValute,
+      priceToShow: parseFloat(
+        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+      ),
+    };
+
+    return res.json(newGood);
+
+
+    // return res.json(good);
   } catch (err) {
     console.log(err);
   }
@@ -397,9 +442,7 @@ app.post('/api/admin_add_new_type', async (req, res) => {
   }
 });
 
-
-
-//действия с корзиной 
+//действия с корзиной
 app.post('/api/user_add_good_tocart', async (req, res) => {
   try {
     const { userid, goodsarray, action } = req.body;
@@ -415,7 +458,13 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         await newCart.save();
         return res.status(200).json({ status: 'ok', action: 'cart created' });
       }
-      return res.status(200).json({ status: 'ok', action: 'no cart', message: 'Корзина не существует' });
+      return res
+        .status(200)
+        .json({
+          status: 'ok',
+          action: 'no cart',
+          message: 'Корзина не существует',
+        });
     }
 
     // Находим индекс товара в корзине
@@ -429,10 +478,10 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         cart.goods.push(goodsarray[0]);
         console.log('Товара нет, добавляем новый');
       } else {
-        return res.status(200).json({ 
-          status: 'ok', 
-          action: 'not found', 
-          message: 'Товар не найден в корзине' 
+        return res.status(200).json({
+          status: 'ok',
+          action: 'not found',
+          message: 'Товар не найден в корзине',
         });
       }
     } else {
@@ -464,7 +513,7 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
 
     // Сохраняем изменения
     await cart.save();
-    
+
     // Проверяем, остались ли товары в корзине
     if (cart.goods.length === 0) {
       await CartsModel.deleteOne({ tlgid: userid });
@@ -474,21 +523,40 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
     res.status(200).json({ status: 'ok', action: 'cart updated' });
   } catch (error) {
     console.error('[Error]', error);
-    res.status(500).json({ 
-      error: 'Server error', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
     });
   }
 });
 
 
-
-//показать корзину пользователя
 //показать корзину пользователя
 app.get('/api/user_get_mycart', async (req, res) => {
   try {
-    const cart = await CartsModel.findOne({ tlgid: req.query.tlgid });
-    if (!cart) return res.json({ status: 'ok', goods: [], totalQty: 0, totalPrice: 0 });
+    const cart = await CartsModel.findOne({ tlgid: req.query.tlgid }).lean();
+    if (!cart)
+      return res.json({ status: 'ok', goods: [], totalQty: 0, totalPrice: 0 });
+
+
+    // const good = await GoodsModel.findById(req.query.id).lean();
+
+    // const goods = await GoodsModel.find().lean();
+
+    const user = await UserModel.findOne({ tlgid: req.query.tlgid });
+    const userValute = user.valute;
+    const exchangeRates = await currencyConverter();
+
+
+    // const newGood = {
+    //   ...good,
+    //   valuteToShow: userValute,
+    //   priceToShow: parseFloat(
+    //     (good.price_eu * exchangeRates[userValute]).toFixed(0)
+    //   ),
+    // };
+
+
 
     // Используем Promise.all для параллельной загрузки товаров
     const goodsWithDetails = await Promise.all(
@@ -500,17 +568,20 @@ app.get('/api/user_get_mycart', async (req, res) => {
             return null;
           }
           const itemPrice = Number(good.price_eu);
+          const convertedPrice = Number((itemPrice*exchangeRates[userValute])).toFixed(0)
           const itemQty = Number(item.qty);
-          
+
           return {
             name_en: good.name_en,
             name_de: good.name_de,
             name_ru: good.name_ru,
-            price: itemPrice,
+            price_eu: itemPrice,
+            priceToShow: convertedPrice,
             qty: itemQty,
             itemId: item.itemId,
             img: good.file?.url || null,
-            totalpriceItem: itemPrice * itemQty
+            totalpriceItem: convertedPrice * itemQty,
+            valuteToShow:userValute
           };
         } catch (error) {
           console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
@@ -520,28 +591,77 @@ app.get('/api/user_get_mycart', async (req, res) => {
     );
 
     // Фильтруем null значения (если какие-то товары не найдены)
-    const filteredGoods = goodsWithDetails.filter(item => item !== null);
+    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
 
     // Рассчитываем общее количество товаров и общую сумму
     const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
-    const totalPrice = filteredGoods.reduce((sum, item) => sum + item.totalpriceItem, 0);
+    const totalPrice = filteredGoods.reduce(
+      (sum, item) => sum + item.totalpriceItem,
+      0
+    );
 
-    return res.json({ 
-      status: 'ok', 
+    return res.json({
+      status: 'ok',
       goods: filteredGoods,
       totalQty: totalQty,
-      totalPriceCart: parseFloat(totalPrice.toFixed(2)) // Округляем до 2 знаков после запятой
+      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
     });
   } catch (err) {
     console.error('Ошибка в /api/user_get_mycart:', err);
-    return res.status(500).json({ 
+    return res.status(500).json({
       status: 'error',
-      message: 'Internal server error'
+      message: 'Internal server error',
     });
   }
 });
 
+// смена валюты в БД
+app.post('/api/change_valute', async (req, res) => {
+  try {
+  await UserModel.findOneAndUpdate(
+    { tlgid: req.body.tlgid },
+    { $set: { valute: req.body.valute } }
+  );
 
+  return res.json({status: 'ok'});
+  } catch (err) {
+    console.error('Ошибка в /api/change_valute', err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+    });
+}
+});
+
+// смена языка в БД
+app.post('/api/change_language', async (req, res) => {
+  try {
+  await UserModel.findOneAndUpdate(
+    { tlgid: req.body.tlgid },
+    { $set: { language: req.body.language } }
+  );
+
+  return res.json({status: 'ok'});
+}catch (err) {
+    console.error('Ошибка в /api/change_language', err);
+    return res.status(500).json({
+      status: 'error',
+      message: 'Internal server error',
+    });
+}});
+
+async function currencyConverter() {
+  const balance1 = await Convert(1).from('EUR').to('USD');
+  const balance2 = await Convert(1).from('EUR').to('RUB');
+
+  const exchangeRates = {
+    '€': 1,
+    '$': balance1,
+    '₽': balance2,
+  };
+  
+  return exchangeRates;
+}
 
 /////////////////////
 
