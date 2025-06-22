@@ -7,6 +7,7 @@ const UserSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    jbid: Number,
     valute: String,
     language: String,
   },

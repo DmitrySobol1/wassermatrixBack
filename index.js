@@ -20,6 +20,7 @@ import https from 'https';
 const PORT = process.env.PORT || 4444;
 
 import { TEXTS } from './texts.js';
+import goods from './models/goods.js';
 
 // const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
 
@@ -73,7 +74,7 @@ app.post('/api/enter', async (req, res) => {
 
     //создание юзера
     if (!user) {
-      await createNewUser(req.body.tlgid);
+      await createNewUser(req.body.tlgid, req.body.jbid);
       const userData = { result: 'showOnboarding' };
       return res.json({ userData });
     }
@@ -90,11 +91,12 @@ app.post('/api/enter', async (req, res) => {
   }
 });
 
-async function createNewUser(tlgid) {
+async function createNewUser(tlgid,jbid) {
   try {
     const doc = new UserModel({
       tlgid: tlgid,
-      valute: 'eur',
+      jbid: jbid,
+      valute: '€',
       language: 'en',
     });
 
@@ -236,7 +238,7 @@ app.get('/api/user_get_goodsstype', async (req, res) => {
   }
 });
 
-//получить все товары
+//получить все товары - user
 app.get('/api/user_get_goods', async (req, res) => {
   try {
     // const goods = await GoodsModel.find();
@@ -270,6 +272,20 @@ app.get('/api/user_get_goods', async (req, res) => {
     console.log(err);
   }
 });
+
+
+//получить все товары - admin
+app.get('/api/admin_get_goods', async (req, res) => {
+  try {
+    const goods = await GoodsModel.find();
+
+    return res.json(goods);
+  } catch (err) {
+    console.log(err);
+  }
+});  
+
+
 
 //получить товар по id
 app.get('/api/user_get_currentgood', async (req, res) => {
@@ -662,6 +678,132 @@ async function currencyConverter() {
   
   return exchangeRates;
 }
+
+
+//получить все корзины - admin
+// app.get('/api/admin_get_carts', async (req, res) => {
+//   try {
+//     const carts = await CartsModel.find().sort({ updatedAt: -1 });
+
+
+//     const qtyItems = carts.length
+
+
+
+//     const formatDate = (isoString) => {
+//       const date = new Date(isoString);
+//       const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 
+//                      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      
+//       const day = String(date.getUTCDate()).padStart(2, '0');
+//       const month = months[date.getUTCMonth()];
+//       const year = date.getUTCFullYear();
+//       const hours = String(date.getUTCHours()).padStart(2, '0');
+//       const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+      
+//       return `${day} ${month} ${year} ${hours}:${minutes}Z`;
+//     };
+
+//     const cartsWithFormattedDates = carts.map(item => ({
+//       ...item.toObject(), // Преобразуем Mongoose документ в обычный объект
+//       formattedDate: formatDate(item.updatedAt)
+//     }));
+
+//     return res.json({carts:cartsWithFormattedDates,qtyItems:qtyItems} );
+//   } catch (err) {
+//     console.error('Error in /api/admin_get_carts:', err);
+//     return res.status(500).json({ error: 'Internal server error' });
+//   }
+// }); 
+
+
+app.get('/api/admin_get_carts', async (req, res) => {
+  try {
+    let carts = await CartsModel.aggregate([
+      {
+        $sort: { updatedAt: -1 }
+      },
+      {
+        $lookup: {
+          from: 'goods', // название коллекции с товарами
+          localField: 'goods.itemId', // поле в корзине с id товара
+          foreignField: '_id', // поле в коллекции товаров
+          as: 'goodsInfo' // временное поле с информацией о товарах
+        }
+      },
+      {
+        $addFields: {
+          goods: {
+            $map: {
+              input: '$goods',
+              as: 'good',
+              in: {
+                $mergeObjects: [
+                  '$$good',
+                  {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: '$goodsInfo',
+                          as: 'info',
+                          cond: { $eq: ['$$info._id', '$$good.itemId'] }
+                        }
+                      },
+                      0
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          formattedDate: {
+            $dateToString: {
+              format: '%d %b %Y %H:%MZ',
+              date: '$updatedAt',
+              timezone: 'UTC'
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          goodsInfo: 0 // удаляем временное поле
+        }
+      }
+    ]);
+
+
+     let grandTotal = 0; // Общая сумма всех корзин
+    
+    carts = carts.map(cart => {
+      const total = cart.goods.reduce((sum, good) => {
+        return sum + ((good.price_eu || 0) * (good.qty || 0));
+      }, 0);
+      
+      grandTotal += total; // Добавляем к общей сумме
+      const qtyItemsInCart = cart.goods.length;
+
+      return {
+        ...cart,
+        totalAmount: total,
+        qtyItemsInCart: qtyItemsInCart
+      };
+    });
+
+    const qtyItems = carts.length;
+
+    return res.json({ 
+      carts,
+      qtyItems,
+      grandTotal // Общая сумма всех корзин
+    });
+  } catch (err) {
+    console.error('Error in /api/admin_get_carts:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 
 /////////////////////
 
