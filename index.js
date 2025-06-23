@@ -287,7 +287,7 @@ app.get('/api/admin_get_goods', async (req, res) => {
 
 
 
-//получить товар по id
+//получить товар по id - user
 app.get('/api/user_get_currentgood', async (req, res) => {
   try {
     const good = await GoodsModel.findById(req.query.id).lean();
@@ -316,6 +316,40 @@ app.get('/api/user_get_currentgood', async (req, res) => {
     console.log(err);
   }
 });
+
+
+
+//получить товар по id - admin
+app.get('/api/admin_get_currentgood', async (req, res) => {
+  try {
+    const good = await GoodsModel.findById(req.query.id).lean();
+
+    // const goods = await GoodsModel.find().lean();
+
+    // const user = await UserModel.findOne({ tlgid: req.query.tlgid });
+    // const userValute = user.valute;
+
+
+    // const exchangeRates = await currencyConverter();
+
+    // const newGood = {
+    //   ...good,
+    //   valuteToShow: userValute,
+    //   priceToShow: parseFloat(
+    //     (good.price_eu * exchangeRates[userValute]).toFixed(0)
+    //   ),
+    // };
+
+    return res.json(good);
+
+
+    // return res.json(good);
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+
 
 //админ - редактировать товар
 app.post('/api/admin_edit_good', upload.single('file'), async (req, res) => {
@@ -465,11 +499,17 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
     const cart = await CartsModel.findOne({ tlgid: userid });
 
     if (!cart) {
+
+      const user = await UserModel.findOne({ tlgid: userid });
+      const jbid = user.jbid
+
+      
       if (action === 'plus') {
         // Создаем новую корзину только для действия "plus"
         const newCart = new CartsModel({
           tlgid: userid,
           goods: goodsarray,
+          jbid: jbid
         });
         await newCart.save();
         return res.status(200).json({ status: 'ok', action: 'cart created' });

@@ -8,6 +8,7 @@ const CartsSchema = new mongoose.Schema(
       required: true,
       index: true
     },
+    jbid: Number,
     goods: [{
       itemId: {
         type: mongoose.Schema.Types.ObjectId, // Ссылка на товар
