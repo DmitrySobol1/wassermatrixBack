@@ -23,6 +23,10 @@ const GoodsSchema = new mongoose.Schema(
     price_eu: Number,
     img: String,
     type: String,
+
+    delivery_price_de: Number, 
+    delivery_price_inEu: Number, 
+    delivery_price_outEu: Number, 
     file: {
       filename: String,
       contentType: String,
