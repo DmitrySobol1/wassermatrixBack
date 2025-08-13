@@ -1371,16 +1371,15 @@ app.post('/api/create_payment_session', async (req, res) => {
       };
     });
 
-    console.log('FRONTEND_URL=',process.env.FRONTEND_URL )
+    // console.log('FRONTEND_URL=',process.env.FRONTEND_URL )
 
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      // success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      success_url: process.env.FRONTEND_URL,
-      cancel_url: `${process.env.FRONTEND_URL}/payment-choice-page`, 
+      success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/#/payment-choice-page`, 
       metadata: {
         tlgid: tlgid.toString(),
         deliveryInfo: JSON.stringify(deliveryInfo),
