@@ -10,6 +10,7 @@ import OrdersModel from './models/orders.js';
 import OrdersStatusSchema from './models/ordersStatus.js'
 
 import { Convert } from 'easy-currencies';
+import Stripe from 'stripe';
 
 // для файлов
 import multer from 'multer';
@@ -22,6 +23,9 @@ import axios from 'axios';
 import https from 'https';
 
 const PORT = process.env.PORT || 4444;
+
+// Инициализация Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 import { TEXTS } from './texts.js';
 import goods from './models/goods.js';
@@ -1281,6 +1285,69 @@ app.post('/api/admin_update_order_status', async (req, res) => {
     });
   } catch (error) {
     console.error('[Error] Full error:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// создать Stripe Checkout Session для оплаты
+app.post('/api/create_payment_session', async (req, res) => {
+  try {
+    const { cart, deliveryInfo, totalSum, region } = req.body;
+
+    if (!cart || !deliveryInfo || !totalSum) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Cart, delivery info and total sum are required' 
+      });
+    }
+
+    // Создаем line items для Stripe из товаров корзины
+    const lineItems = cart.map((item) => {
+
+      // console.log('process.env.FRONTEND_URL', process.env.FRONTEND_URL)
+      // return
+
+      const itemPrice = Number(item.priceToShow) || 0;
+      const deliveryPrice = Number(item[`deliveryPriceToShow_${region}`]) || 0;
+      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в копейках/центах
+
+      return {
+        price_data: {
+          currency: 'eur', // или item.valuteToShow.toLowerCase()
+          product_data: {
+            name: item[`name_en`] || item.name_en,
+            description: `Delivery to ${deliveryInfo.selectedCountry.name_en}`,
+          },
+          unit_amount: Math.round(totalItemPrice / item.qty), // Цена за единицу включая доставку
+        },
+        quantity: item.qty,
+      };
+    });
+
+    // Создаем Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/success-page?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/payment-choice-page`, 
+      metadata: {
+        deliveryInfo: JSON.stringify(deliveryInfo),
+        region: region,
+        totalSum: totalSum.toString(),
+      },
+    });
+
+    res.json({ 
+      status: 'ok', 
+      sessionId: session.id,
+      url: session.url 
+    });
+  } catch (error) {
+    console.error('[Stripe Error] Full error:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,
