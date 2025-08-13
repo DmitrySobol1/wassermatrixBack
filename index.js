@@ -1295,21 +1295,17 @@ app.post('/api/admin_update_order_status', async (req, res) => {
 // создать Stripe Checkout Session для оплаты
 app.post('/api/create_payment_session', async (req, res) => {
   try {
-    const { cart, deliveryInfo, totalSum, region } = req.body;
+    const { cart, deliveryInfo, totalSum, region, tlgid } = req.body;
 
-    if (!cart || !deliveryInfo || !totalSum) {
+    if (!cart || !deliveryInfo || !totalSum || !tlgid) {
       return res.status(400).json({ 
         status: 'error', 
-        message: 'Cart, delivery info and total sum are required' 
+        message: 'Cart, delivery info, total sum and tlgid are required' 
       });
     }
 
     // Создаем line items для Stripe из товаров корзины
     const lineItems = cart.map((item) => {
-
-      // console.log('process.env.FRONTEND_URL', process.env.FRONTEND_URL)
-      // return
-
       const itemPrice = Number(item.priceToShow) || 0;
       const deliveryPrice = Number(item[`deliveryPriceToShow_${region}`]) || 0;
       const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в копейках/центах
@@ -1332,19 +1328,61 @@ app.post('/api/create_payment_session', async (req, res) => {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/payment-choice-page`, 
+      success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/#/payment-choice-page`, 
       metadata: {
+        tlgid: tlgid.toString(),
         deliveryInfo: JSON.stringify(deliveryInfo),
         region: region,
         totalSum: totalSum.toString(),
       },
     });
 
+    // Получаем информацию о пользователе
+    const user = await UserModel.findOne({ tlgid: tlgid });
+    const jbid = user?.jbid;
+
+    // Находим статус "new" или используем дефолтный
+    let defaultStatus = await OrdersStatusSchema.findOne({ name_en: 'new' });
+    if (!defaultStatus) {
+      // Если нет статуса "new", создаем его
+      defaultStatus = new OrdersStatusSchema({
+        name_en: 'new',
+        name_ru: 'новый',
+        name_de: 'neu',
+        numForFilter: 1
+      });
+      await defaultStatus.save();
+    }
+
+    // Создаем заказ с stripeSessionId, но payStatus=false до подтверждения
+    const newOrder = new OrdersModel({
+      tlgid: tlgid,
+      jbid: jbid,
+      goods: cart.map((item) => ({
+        itemId: item.itemId,
+        qty: item.qty
+      })),
+      country: deliveryInfo.selectedCountry.name_en,
+      regionDelivery: region,
+      adress: deliveryInfo.address, // Note: keeping 'adress' spelling to match model
+      phone: deliveryInfo.phone,
+      name: deliveryInfo.userName,
+      orderStatus: defaultStatus._id,
+      payStatus: false, // Будет изменено на true через webhook
+      stripeSessionId: session.id // Сохраняем session ID для webhook
+    });
+
+    await newOrder.save();
+
+    // Удаляем корзину пользователя
+    await CartsModel.deleteOne({ tlgid: tlgid });
+
     res.json({ 
       status: 'ok', 
       sessionId: session.id,
-      url: session.url 
+      url: session.url,
+      orderId: newOrder._id
     });
   } catch (error) {
     console.error('[Stripe Error] Full error:', error);
@@ -1353,6 +1391,54 @@ app.post('/api/create_payment_session', async (req, res) => {
       message: error.message,
     });
   }
+});
+
+// Stripe webhook для обработки подтверждения платежей
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // Проверяем подпись webhook от Stripe
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.log(`Webhook signature verification failed.`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Обрабатываем событие
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      console.log('Payment was successful!', session.id);
+      
+      try {
+        // Ищем заказ по stripeSessionId и обновляем payStatus
+        const updatedOrder = await OrdersModel.findOneAndUpdate(
+          { stripeSessionId: session.id },
+          { payStatus: true },
+          { new: true }
+        );
+
+        if (updatedOrder) {
+          console.log(`Order ${updatedOrder._id} payment status updated to true`);
+        } else {
+          console.log(`Order with session ID ${session.id} not found`);
+        }
+      } catch (error) {
+        console.error('Error updating order payment status:', error);
+      }
+      break;
+
+    case 'payment_intent.payment_failed':
+      console.log('Payment failed for session:', event.data.object.id);
+      break;
+
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({received: true});
 });
 
 /////////////////////
