@@ -39,6 +39,54 @@ mongoose
 
 const app = express();
 
+// Stripe webhook должен быть ПЕРЕД express.json() для получения raw body
+app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    // Проверяем подпись webhook от Stripe
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.log(`Webhook signature verification failed.`, err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Обрабатываем событие
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      console.log('Payment was successful!', session.id);
+      
+      try {
+        // Ищем заказ по stripeSessionId и обновляем payStatus
+        const updatedOrder = await OrdersModel.findOneAndUpdate(
+          { stripeSessionId: session.id },
+          { payStatus: true },
+          { new: true }
+        );
+
+        if (updatedOrder) {
+          console.log(`Order ${updatedOrder._id} payment status updated to true`);
+        } else {
+          console.log(`Order with session ID ${session.id} not found`);
+        }
+      } catch (error) {
+        console.error('Error updating order payment status:', error);
+      }
+      break;
+
+    case 'payment_intent.payment_failed':
+      console.log('Payment failed for session:', event.data.object.id);
+      break;
+
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({received: true});
+});
+
 app.use(express.json());
 app.use(cors());
 
@@ -1323,13 +1371,16 @@ app.post('/api/create_payment_session', async (req, res) => {
       };
     });
 
+    console.log('FRONTEND_URL=',process.env.FRONTEND_URL )
+
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/#/payment-choice-page`, 
+      // success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: process.env.FRONTEND_URL,
+      cancel_url: `${process.env.FRONTEND_URL}/payment-choice-page`, 
       metadata: {
         tlgid: tlgid.toString(),
         deliveryInfo: JSON.stringify(deliveryInfo),
@@ -1391,54 +1442,6 @@ app.post('/api/create_payment_session', async (req, res) => {
       message: error.message,
     });
   }
-});
-
-// Stripe webhook для обработки подтверждения платежей
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    // Проверяем подпись webhook от Stripe
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.log(`Webhook signature verification failed.`, err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // Обрабатываем событие
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      console.log('Payment was successful!', session.id);
-      
-      try {
-        // Ищем заказ по stripeSessionId и обновляем payStatus
-        const updatedOrder = await OrdersModel.findOneAndUpdate(
-          { stripeSessionId: session.id },
-          { payStatus: true },
-          { new: true }
-        );
-
-        if (updatedOrder) {
-          console.log(`Order ${updatedOrder._id} payment status updated to true`);
-        } else {
-          console.log(`Order with session ID ${session.id} not found`);
-        }
-      } catch (error) {
-        console.error('Error updating order payment status:', error);
-      }
-      break;
-
-    case 'payment_intent.payment_failed':
-      console.log('Payment failed for session:', event.data.object.id);
-      break;
-
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
-
-  res.json({received: true});
 });
 
 /////////////////////
