@@ -1366,7 +1366,7 @@ app.post('/api/create_payment_session', async (req, res) => {
     const lineItems = cart.map((item) => {
       const itemPrice = Number(item.price_eu);
       const deliveryPrice = Number(item[`deliveryPriceEU_${region}`]);
-      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в центах
+      const totalItemPrice = (itemPrice + deliveryPrice)*item.qty * 100; // Stripe работает в центах
 
       return {
         price_data: {
@@ -1497,9 +1497,9 @@ app.post('/api/repay_order', async (req, res) => {
     // Создаем line items для Stripe из товаров заказа
     const lineItems = order.goods.map((item) => {
       const good = item.itemId;
-      const itemPrice = Number(good.price_eu) || 0;
-      const deliveryPrice = Number(good[`delivery_price_${order.regionDelivery}`]) || 0;
-      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в копейках/центах
+      const itemPrice = Number(good.price_eu);
+      const deliveryPrice = Number(good[`delivery_price_${order.regionDelivery}`]);
+      const totalItemPrice = (itemPrice + deliveryPrice)*item.qty * 100; // Stripe работает в копейках/центах
 
       return {
         price_data: {
