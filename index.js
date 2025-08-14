@@ -791,9 +791,9 @@ app.get('/api/user_get_mycart', async (req, res) => {
           const deliveryPriceInEu=Number(good.delivery_price_inEu)
           const deliveryPriceOutEu=Number(good.delivery_price_outEu)
 
-          const deliveryPriceToShow_de = Number(deliveryPriceDe * exchangeRates[userValute]).toFixed(0);
-          const deliveryPriceToShow_inEu = Number(deliveryPriceInEu * exchangeRates[userValute]).toFixed(0);
-          const deliveryPriceToShow_outEu = Number(deliveryPriceOutEu * exchangeRates[userValute]).toFixed(0);
+          const deliveryPriceToShow_de = Number(deliveryPriceDe * exchangeRates[userValute]).toFixed(2);
+          const deliveryPriceToShow_inEu = Number(deliveryPriceInEu * exchangeRates[userValute]).toFixed(2);
+          const deliveryPriceToShow_outEu = Number(deliveryPriceOutEu * exchangeRates[userValute]).toFixed(2);
 
           return {
             name_en: good.name_en,
@@ -804,6 +804,9 @@ app.get('/api/user_get_mycart', async (req, res) => {
             deliveryPriceToShow_de: deliveryPriceToShow_de, 
             deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
             deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+            deliveryPriceEU_de: deliveryPriceDe,
+            deliveryPriceEU_inEu: deliveryPriceInEu,
+            deliveryPriceEU_outEu: deliveryPriceOutEu,
             qty: itemQty,
             itemId: item.itemId,
             img: good.file?.url || null,
@@ -831,6 +834,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
       status: 'ok',
       goods: filteredGoods,
       totalQty: totalQty,
+      valuteToShow: userValute,
       totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
     });
   } catch (err) {
@@ -1153,17 +1157,22 @@ app.get('/api/user_get_my_orders', async (req, res) => {
 
     // Получаем информацию о пользователе для валюты
     const user = await UserModel.findOne({ tlgid: tlgid });
-    const userValute = user?.valute || '€';
+    const userValute = user?.valute;
     const exchangeRates = await currencyConverter();
 
     // Обогащаем данные о заказах
     const ordersWithDetails = orders.map((order) => {
+      
       const goodsWithDetails = order.goods.map((item) => {
         const good = item.itemId;
         if (!good) return null;
 
         const itemPrice = Number(good.price_eu) || 0;
         const convertedPrice = Number(itemPrice * exchangeRates[userValute]).toFixed(0);
+        
+        // Получаем цену доставки в зависимости от regionDelivery
+        const deliveryPriceEur = Number(good[`delivery_price_${order.regionDelivery}`]) || 0;
+        const convertedDeliveryPrice = Number(deliveryPriceEur * exchangeRates[userValute]).toFixed(2);
         
         return {
           ...item,
@@ -1175,6 +1184,7 @@ app.get('/api/user_get_my_orders', async (req, res) => {
           delivery_price_de: good.delivery_price_de,
           delivery_price_inEu: good.delivery_price_inEu,
           delivery_price_outEu: good.delivery_price_outEu,
+          convertedDeliveryPrice: convertedDeliveryPrice, 
           valuteToShow: userValute,
         };
       }).filter(item => item !== null);
@@ -1186,7 +1196,7 @@ app.get('/api/user_get_my_orders', async (req, res) => {
       };
     });
 
-    res.json(ordersWithDetails);
+    res.json({orders:ordersWithDetails, valuteToShow:userValute});
   } catch (error) {
     console.error('[Error] Full error:', error);
     res.status(500).json({
@@ -1354,13 +1364,13 @@ app.post('/api/create_payment_session', async (req, res) => {
 
     // Создаем line items для Stripe из товаров корзины
     const lineItems = cart.map((item) => {
-      const itemPrice = Number(item.priceToShow) || 0;
-      const deliveryPrice = Number(item[`deliveryPriceToShow_${region}`]) || 0;
-      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в копейках/центах
+      const itemPrice = Number(item.price_eu);
+      const deliveryPrice = Number(item[`deliveryPriceEU_${region}`]);
+      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в центах
 
       return {
         price_data: {
-          currency: 'eur', // или item.valuteToShow.toLowerCase()
+          currency: 'eur',
           product_data: {
             name: item[`name_en`] || item.name_en,
             description: `Delivery to ${deliveryInfo.selectedCountry.name_en}`,
@@ -1371,7 +1381,8 @@ app.post('/api/create_payment_session', async (req, res) => {
       };
     });
 
-    // console.log('FRONTEND_URL=',process.env.FRONTEND_URL )
+    console.log('lineItems',lineItems )
+    
 
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -1379,7 +1390,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       line_items: lineItems,
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/#/payment-choice-page`, 
+      cancel_url: `${process.env.FRONTEND_URL}/#/cancellpay-page`, 
       metadata: {
         tlgid: tlgid.toString(),
         deliveryInfo: JSON.stringify(deliveryInfo),
@@ -1436,6 +1447,100 @@ app.post('/api/create_payment_session', async (req, res) => {
     });
   } catch (error) {
     console.error('[Stripe Error] Full error:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// Повторная оплата существующего заказа
+app.post('/api/repay_order', async (req, res) => {
+  try {
+    const { orderId, tlgid } = req.body;
+
+    if (!orderId || !tlgid) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Order ID and tlgid are required' 
+      });
+    }
+
+    // Ищем заказ в базе данных
+    const order = await OrdersModel.findById(orderId)
+      .populate('goods.itemId')
+      .lean();
+
+    if (!order) {
+      return res.status(404).json({ 
+        status: 'error', 
+        message: 'Order not found' 
+      });
+    }
+
+    // Проверяем, что заказ принадлежит пользователю
+    if (order.tlgid !== tlgid) {
+      return res.status(403).json({ 
+        status: 'error', 
+        message: 'Access denied' 
+      });
+    }
+
+    // Если заказ уже оплачен, возвращаем ошибку
+    if (order.payStatus === true) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Order is already paid' 
+      });
+    }
+
+    // Создаем line items для Stripe из товаров заказа
+    const lineItems = order.goods.map((item) => {
+      const good = item.itemId;
+      const itemPrice = Number(good.price_eu) || 0;
+      const deliveryPrice = Number(good[`delivery_price_${order.regionDelivery}`]) || 0;
+      const totalItemPrice = (itemPrice + deliveryPrice) * 100; // Stripe работает в копейках/центах
+
+      return {
+        price_data: {
+          currency: 'eur',
+          product_data: {
+            name: good.name_en,
+            description: `Delivery to ${order.country}`,
+          },
+          unit_amount: Math.round(totalItemPrice / item.qty), // Цена за единицу включая доставку
+        },
+        quantity: item.qty,
+      };
+    });
+
+    // Создаем новую Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/#/orders`, 
+      metadata: {
+        orderId: orderId,
+        tlgid: tlgid.toString(),
+        repayment: 'true'
+      },
+    });
+
+    // Обновляем stripeSessionId в существующем заказе
+    await OrdersModel.findByIdAndUpdate(orderId, {
+      stripeSessionId: session.id
+    });
+
+    res.json({ 
+      status: 'ok', 
+      sessionId: session.id,
+      url: session.url,
+      orderId: orderId
+    });
+  } catch (error) {
+    console.error('[Repay Order Error] Full error:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,
