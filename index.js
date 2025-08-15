@@ -63,6 +63,7 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
         const updatedOrder = await OrdersModel.findOneAndUpdate(
           { stripeSessionId: session.id },
           { payStatus: true },
+          { payment_intent: session.payment_intent},
           { new: true }
         );
 
@@ -80,22 +81,24 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
       console.log('Payment failed for session:', event.data.object.id);
       break;
     
-    case 'charge.updated':
+      
+      
+      case 'charge.updated':
       const session2 = event.data.object;
       console.log('receipt received', session2.id);
       
       try {
         // Ищем заказ по stripeSessionId и обновляем payStatus
         const updatedOrder2 = await OrdersModel.findOneAndUpdate(
-          { stripeSessionId: session2.id },
+          { payment_intent: session2.payment_intent },
           { receipt: session2.receipt_url },
           { new: true }
         );
 
         if (updatedOrder2) {
-          console.log(`Order ${updatedOrder2._id} receipt url set`);
+          console.log(`Payment intent ${updatedOrder2.payment_intent} receipt url set`);
         } else {
-          console.log(`Order with session ID ${session2.id} not found`);
+          console.log(`Order with Payment intent ${session2.payment_intent} not found`);
         }
       } catch (error) {
         console.error('Error updating receipt url:', error);

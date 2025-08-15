@@ -37,7 +37,11 @@ const OrdersSchema = new mongoose.Schema(
     receipt: {
       type: String,
       default: ''
-    }
+    },
+    payment_intent: {
+      type: String,
+      default: ''
+    },
     
   },
   {
