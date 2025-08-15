@@ -8,6 +8,7 @@ import CartsModel from './models/carts.js';
 import CountriesForDeliveryModel from './models/countriesForDelivery.js';
 import OrdersModel from './models/orders.js';
 import OrdersStatusSchema from './models/ordersStatus.js';
+import ReceiptsModel from './models/receipts.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -93,28 +94,32 @@ app.post(
         break;
 
       case 'charge.updated':
-        const session2 = event.data.object;
+        const intent = event.data.object;
         console.log('receipt received', session2.id);
 
-        try {
-          // Ищем заказ по stripeSessionId и обновляем payStatus
-          const updatedOrder2 = await OrdersModel.findOneAndUpdate(
-            { payment_intent: session2.payment_intent },
-            { receipt: session2.receipt_url },
-            { new: true }
-          );
+        // создаем новую запись в БД ReceiptsModel
 
-          if (updatedOrder2) {
+        try {
+
+          const receipt = new ReceiptsModel({
+              payment_intent: intent.payment_intent,
+              url: intent.receipt_url,
+          });
+
+          await receipt.save();
+
+
+          if (receipt) {
             console.log(
-              `Payment intent ${updatedOrder2.payment_intent} receipt url set`
+              `New payment intent ${intent.payment_intent} created at DB`
             );
           } else {
             console.log(
-              `Order with Payment intent ${session2.payment_intent} not found`
+              `someting went wrong`
             );
           }
         } catch (error) {
-          console.error('Error updating receipt url:', error);
+          console.error('Error creating payment url:', error);
         }
         break;
 
