@@ -95,12 +95,12 @@ app.post(
 
       case 'charge.updated':
         const intent = event.data.object;
-        console.log('receipt received', session2.id);
+        console.log('receipt received', intent.id);
 
-        // создаем новую запись в БД ReceiptsModel
+        
 
         try {
-
+          // создаем новую запись в БД ReceiptsModel
           const receipt = new ReceiptsModel({
               payment_intent: intent.payment_intent,
               url: intent.receipt_url,
