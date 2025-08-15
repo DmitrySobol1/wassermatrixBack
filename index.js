@@ -97,8 +97,6 @@ app.post(
         const intent = event.data.object;
         console.log('receipt received', intent.id);
 
-        
-
         try {
           // создаем новую запись в БД ReceiptsModel
           const receipt = new ReceiptsModel({
@@ -1686,6 +1684,43 @@ app.post('/api/user_update_profile', async (req, res) => {
     });
   } catch (error) {
     console.error('[Update User Profile Error]:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// получить чек по payment_intent
+app.get('/api/get_receipt', async (req, res) => {
+  try {
+    const { payment_intent } = req.query;
+
+    if (!payment_intent) {
+      return res
+        .status(400)
+        .json({ status: 'error', message: 'payment_intent is required' });
+    }
+
+    // Ищем чек в базе данных по payment_intent
+    const receipt = await ReceiptsModel.findOne({ 
+      payment_intent: payment_intent 
+    });
+
+    if (!receipt) {
+      return res
+        .status(404)
+        .json({ status: 'error', message: 'Receipt not found' });
+    }
+
+    // Возвращаем URL чека
+    res.json({ 
+      status: 'ok', 
+      url: receipt.url 
+    });
+
+  } catch (error) {
+    console.error('[Error] Get receipt error:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,
