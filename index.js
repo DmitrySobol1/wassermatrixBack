@@ -79,6 +79,28 @@ app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (
     case 'payment_intent.payment_failed':
       console.log('Payment failed for session:', event.data.object.id);
       break;
+    
+    case 'charge.updated':
+      const session2 = event.data.object;
+      console.log('receipt received', session2.id);
+      
+      try {
+        // Ищем заказ по stripeSessionId и обновляем payStatus
+        const updatedOrder2 = await OrdersModel.findOneAndUpdate(
+          { stripeSessionId: session2.id },
+          { receipt: session2.receipt_url },
+          { new: true }
+        );
+
+        if (updatedOrder2) {
+          console.log(`Order ${updatedOrder2._id} receipt url set`);
+        } else {
+          console.log(`Order with session ID ${session2.id} not found`);
+        }
+      } catch (error) {
+        console.error('Error updating receipt url:', error);
+      }
+      break;
 
     default:
       console.log(`Unhandled event type ${event.type}`);
@@ -1541,6 +1563,97 @@ app.post('/api/repay_order', async (req, res) => {
     });
   } catch (error) {
     console.error('[Repay Order Error] Full error:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// Получить данные пользователя
+app.get('/api/user_get_profile', async (req, res) => {
+  try {
+    const { tlgid } = req.query;
+
+    if (!tlgid) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'tlgid is required' 
+      });
+    }
+
+    // Ищем пользователя в базе данных
+    const user = await UserModel.findOne({ tlgid: Number(tlgid) }).lean();
+
+    if (!user) {
+      return res.status(404).json({ 
+        status: 'error', 
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      status: 'ok',
+      user: {
+        tlgid: user.tlgid,
+        name: user.name || '',
+        phone: user.phone || '',
+        adress: user.adress || '' // Keeping original spelling
+      }
+    });
+  } catch (error) {
+    console.error('[Get User Profile Error]:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// Обновить данные пользователя
+app.post('/api/user_update_profile', async (req, res) => {
+  try {
+    const { tlgid, name, phone, adress } = req.body;
+
+    if (!tlgid) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'tlgid is required' 
+      });
+    }
+
+    // Обновляем пользователя в базе данных
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { tlgid: Number(tlgid) },
+      { 
+        $set: {
+          ...(name !== undefined && { name }),
+          ...(phone !== undefined && { phone }),
+          ...(adress !== undefined && { adress })
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ 
+        status: 'error', 
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      status: 'ok',
+      message: 'Profile updated successfully',
+      user: {
+        tlgid: updatedUser.tlgid,
+        name: updatedUser.name || '',
+        phone: updatedUser.phone || '',
+        adress: updatedUser.adress || ''
+      }
+    });
+  } catch (error) {
+    console.error('[Update User Profile Error]:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,

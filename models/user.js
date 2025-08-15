@@ -10,6 +10,18 @@ const UserSchema = new mongoose.Schema(
     jbid: Number,
     valute: String,
     language: String,
+    name: {
+      type: String,
+      default: ''
+    },
+    phone: {
+      type: String,
+      default: ''
+    },
+    adress: {
+      type: String,
+      default: ''
+    },
   },
   {
     timestamps: true,

@@ -33,7 +33,11 @@ const OrdersSchema = new mongoose.Schema(
       default: new mongoose.Types.ObjectId('689b8a7a931ce1b95f7c76b2')
     },
     payStatus: Boolean,
-    stripeSessionId: String // ID сессии Stripe для отслеживания платежа
+    stripeSessionId: String,   // ID сессии Stripe для отслеживания платежа
+    receipt: {
+      type: String,
+      default: ''
+    }
     
   },
   {
