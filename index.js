@@ -7,7 +7,7 @@ import DeliveryTypesModel from './models/deliveryTypes.js';
 import CartsModel from './models/carts.js';
 import CountriesForDeliveryModel from './models/countriesForDelivery.js';
 import OrdersModel from './models/orders.js';
-import OrdersStatusSchema from './models/ordersStatus.js'
+import OrdersStatusSchema from './models/ordersStatus.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -40,77 +40,91 @@ mongoose
 const app = express();
 
 // Stripe webhook должен быть ПЕРЕД express.json() для получения raw body
-app.post('/api/stripe-webhook', express.raw({type: 'application/json'}), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
+app.post(
+  '/api/stripe-webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
 
-  try {
-    // Проверяем подпись webhook от Stripe
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.log(`Webhook signature verification failed.`, err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
+    try {
+      // Проверяем подпись webhook от Stripe
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.log(`Webhook signature verification failed.`, err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
 
-  // Обрабатываем событие
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      console.log('Payment was successful!', session.id);
-      
-      try {
-        // Ищем заказ по stripeSessionId и обновляем payStatus
-        const updatedOrder = await OrdersModel.findOneAndUpdate(
-          { stripeSessionId: session.id },
-          { payStatus: true },
-          { payment_intent: session.payment_intent},
-          { new: true }
-        );
+    // Обрабатываем событие
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        console.log('Payment was successful!', session.id);
 
-        if (updatedOrder) {
-          console.log(`Order ${updatedOrder._id} payment status updated to true`);
-        } else {
-          console.log(`Order with session ID ${session.id} not found`);
+        try {
+          // Ищем заказ по stripeSessionId и обновляем payStatus
+          const updatedOrder = await OrdersModel.findOneAndUpdate(
+            { stripeSessionId: session.id }, // условие поиска
+            {
+              payStatus: true, 
+              payment_intent: session.payment_intent, 
+            },
+            { new: true } 
+          );
+
+          if (updatedOrder) {
+            console.log(
+              `Order ${updatedOrder._id} payment status updated to true`
+            );
+          } else {
+            console.log(`Order with session ID ${session.id} not found`);
+          }
+        } catch (error) {
+          console.error('Error updating order payment status:', error);
         }
-      } catch (error) {
-        console.error('Error updating order payment status:', error);
-      }
-      break;
+        break;
 
-    case 'payment_intent.payment_failed':
-      console.log('Payment failed for session:', event.data.object.id);
-      break;
-    
-      
-      
+      case 'payment_intent.payment_failed':
+        console.log('Payment failed for session:', event.data.object.id);
+        break;
+
       case 'charge.updated':
-      const session2 = event.data.object;
-      console.log('receipt received', session2.id);
-      
-      try {
-        // Ищем заказ по stripeSessionId и обновляем payStatus
-        const updatedOrder2 = await OrdersModel.findOneAndUpdate(
-          { payment_intent: session2.payment_intent },
-          { receipt: session2.receipt_url },
-          { new: true }
-        );
+        const session2 = event.data.object;
+        console.log('receipt received', session2.id);
 
-        if (updatedOrder2) {
-          console.log(`Payment intent ${updatedOrder2.payment_intent} receipt url set`);
-        } else {
-          console.log(`Order with Payment intent ${session2.payment_intent} not found`);
+        try {
+          // Ищем заказ по stripeSessionId и обновляем payStatus
+          const updatedOrder2 = await OrdersModel.findOneAndUpdate(
+            { payment_intent: session2.payment_intent },
+            { receipt: session2.receipt_url },
+            { new: true }
+          );
+
+          if (updatedOrder2) {
+            console.log(
+              `Payment intent ${updatedOrder2.payment_intent} receipt url set`
+            );
+          } else {
+            console.log(
+              `Order with Payment intent ${session2.payment_intent} not found`
+            );
+          }
+        } catch (error) {
+          console.error('Error updating receipt url:', error);
         }
-      } catch (error) {
-        console.error('Error updating receipt url:', error);
-      }
-      break;
+        break;
 
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
   }
-
-  res.json({received: true});
-});
+);
 
 app.use(express.json());
 app.use(cors());
@@ -329,13 +343,11 @@ app.get('/api/user_get_goodsstype', async (req, res) => {
 // app.get('/api/user_get_deliverystype', async (req, res) => {
 //   try {
 
-
 //     //  const goods = await GoodsModel.find().lean();
 //     const types = await DeliveryTypesModel.find().lean();
 
 //     const user = await UserModel.findOne({ tlgid: req.query.tlgid });
 //     const userValute = user.valute;
-
 
 //     const exchangeRates = await currencyConverter();
 
@@ -347,31 +359,22 @@ app.get('/api/user_get_goodsstype', async (req, res) => {
 //       ),
 //     }));
 
-
 //     return res.json(newTypes);
 //   } catch (err) {
 //     console.log(err);
 //   }
 // });
 
-
-
 //получить список типов доставок - admin
 app.get('/api/admin_get_deliverystype', async (req, res) => {
   try {
     const types = await DeliveryTypesModel.find();
-
 
     return res.json(types);
   } catch (err) {
     console.log(err);
   }
 });
-
-
-
-
-
 
 //получить все товары - user
 app.get('/api/user_get_goods', async (req, res) => {
@@ -791,12 +794,10 @@ app.get('/api/user_get_mycart', async (req, res) => {
     if (!cart)
       return res.json({ status: 'ok', goods: [], totalQty: 0, totalPrice: 0 });
 
-   
     const user = await UserModel.findOne({ tlgid: req.query.tlgid });
     const userValute = user.valute;
     const exchangeRates = await currencyConverter();
 
-    
     // Используем Promise.all для параллельной загрузки товаров
     const goodsWithDetails = await Promise.all(
       cart.goods.map(async (item) => {
@@ -812,13 +813,19 @@ app.get('/api/user_get_mycart', async (req, res) => {
           ).toFixed(0);
           const itemQty = Number(item.qty);
 
-          const deliveryPriceDe=Number(good.delivery_price_de)
-          const deliveryPriceInEu=Number(good.delivery_price_inEu)
-          const deliveryPriceOutEu=Number(good.delivery_price_outEu)
+          const deliveryPriceDe = Number(good.delivery_price_de);
+          const deliveryPriceInEu = Number(good.delivery_price_inEu);
+          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
 
-          const deliveryPriceToShow_de = Number(deliveryPriceDe * exchangeRates[userValute]).toFixed(2);
-          const deliveryPriceToShow_inEu = Number(deliveryPriceInEu * exchangeRates[userValute]).toFixed(2);
-          const deliveryPriceToShow_outEu = Number(deliveryPriceOutEu * exchangeRates[userValute]).toFixed(2);
+          const deliveryPriceToShow_de = Number(
+            deliveryPriceDe * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_inEu = Number(
+            deliveryPriceInEu * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_outEu = Number(
+            deliveryPriceOutEu * exchangeRates[userValute]
+          ).toFixed(2);
 
           return {
             name_en: good.name_en,
@@ -826,7 +833,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
             name_ru: good.name_ru,
             price_eu: itemPrice,
             priceToShow: convertedPrice,
-            deliveryPriceToShow_de: deliveryPriceToShow_de, 
+            deliveryPriceToShow_de: deliveryPriceToShow_de,
             deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
             deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
             deliveryPriceEU_de: deliveryPriceDe,
@@ -1038,9 +1045,6 @@ app.get('/api/admin_get_carts', async (req, res) => {
   }
 });
 
-
-
-
 //получить список всех стран для доставки - admin
 app.get('/api/admin_get_countries', async (req, res) => {
   try {
@@ -1095,10 +1099,14 @@ app.post('/api/admin_update_country', async (req, res) => {
 
     if (!result) {
       console.warn(`Country with id ${id} not found`);
-      return res.status(404).json({ status: 'error', message: 'Country not found' });
+      return res
+        .status(404)
+        .json({ status: 'error', message: 'Country not found' });
     }
 
-    res.status(200).json({ status: 'ok', message: 'country updated', data: result });
+    res
+      .status(200)
+      .json({ status: 'ok', message: 'country updated', data: result });
   } catch (error) {
     console.error('[Error] Full error:', error);
     console.error('[Error] Stack:', error.stack);
@@ -1112,7 +1120,8 @@ app.post('/api/admin_update_country', async (req, res) => {
 // создать заказ и удалить корзину
 app.post('/api/create_order', async (req, res) => {
   try {
-    const { tlgid, goods, country, regionDelivery, address, phone, name } = req.body;
+    const { tlgid, goods, country, regionDelivery, address, phone, name } =
+      req.body;
 
     const user = await UserModel.findOne({ tlgid: tlgid });
     const jbid = user.jbid;
@@ -1125,7 +1134,7 @@ app.post('/api/create_order', async (req, res) => {
         name_en: 'new',
         name_ru: 'новый',
         name_de: 'neu',
-        numForFilter: 1
+        numForFilter: 1,
       });
       await defaultStatus.save();
     }
@@ -1141,7 +1150,7 @@ app.post('/api/create_order', async (req, res) => {
       phone: phone,
       name: name,
       orderStatus: defaultStatus._id,
-      payStatus: false
+      payStatus: false,
     });
 
     await newOrder.save();
@@ -1149,10 +1158,10 @@ app.post('/api/create_order', async (req, res) => {
     // Удаляем корзину пользователя
     await CartsModel.deleteOne({ tlgid: tlgid });
 
-    res.status(201).json({ 
-      status: 'ok', 
+    res.status(201).json({
+      status: 'ok',
       message: 'Order created successfully',
-      orderId: newOrder._id
+      orderId: newOrder._id,
     });
   } catch (error) {
     console.error('[Error] Full error:', error);
@@ -1170,7 +1179,9 @@ app.get('/api/user_get_my_orders', async (req, res) => {
     const { tlgid } = req.query;
 
     if (!tlgid) {
-      return res.status(400).json({ status: 'error', message: 'tlgid is required' });
+      return res
+        .status(400)
+        .json({ status: 'error', message: 'tlgid is required' });
     }
 
     // Находим заказы пользователя с детализацией товаров и статусов
@@ -1187,41 +1198,47 @@ app.get('/api/user_get_my_orders', async (req, res) => {
 
     // Обогащаем данные о заказах
     const ordersWithDetails = orders.map((order) => {
-      
-      const goodsWithDetails = order.goods.map((item) => {
-        const good = item.itemId;
-        if (!good) return null;
+      const goodsWithDetails = order.goods
+        .map((item) => {
+          const good = item.itemId;
+          if (!good) return null;
 
-        const itemPrice = Number(good.price_eu) || 0;
-        const convertedPrice = Number(itemPrice * exchangeRates[userValute]).toFixed(0);
-        
-        // Получаем цену доставки в зависимости от regionDelivery
-        const deliveryPriceEur = Number(good[`delivery_price_${order.regionDelivery}`]) || 0;
-        const convertedDeliveryPrice = Number(deliveryPriceEur * exchangeRates[userValute]).toFixed(2);
-        
-        return {
-          ...item,
-          name_en: good.name_en,
-          name_de: good.name_de,
-          name_ru: good.name_ru,
-          price_eu: itemPrice,
-          priceToShow: convertedPrice,
-          delivery_price_de: good.delivery_price_de,
-          delivery_price_inEu: good.delivery_price_inEu,
-          delivery_price_outEu: good.delivery_price_outEu,
-          convertedDeliveryPrice: convertedDeliveryPrice, 
-          valuteToShow: userValute,
-        };
-      }).filter(item => item !== null);
+          const itemPrice = Number(good.price_eu) || 0;
+          const convertedPrice = Number(
+            itemPrice * exchangeRates[userValute]
+          ).toFixed(0);
+
+          // Получаем цену доставки в зависимости от regionDelivery
+          const deliveryPriceEur =
+            Number(good[`delivery_price_${order.regionDelivery}`]) || 0;
+          const convertedDeliveryPrice = Number(
+            deliveryPriceEur * exchangeRates[userValute]
+          ).toFixed(2);
+
+          return {
+            ...item,
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: itemPrice,
+            priceToShow: convertedPrice,
+            delivery_price_de: good.delivery_price_de,
+            delivery_price_inEu: good.delivery_price_inEu,
+            delivery_price_outEu: good.delivery_price_outEu,
+            convertedDeliveryPrice: convertedDeliveryPrice,
+            valuteToShow: userValute,
+          };
+        })
+        .filter((item) => item !== null);
 
       return {
         ...order,
         goods: goodsWithDetails,
-        valuteToShow: userValute
+        valuteToShow: userValute,
       };
     });
 
-    res.json({orders:ordersWithDetails, valuteToShow:userValute});
+    res.json({ orders: ordersWithDetails, valuteToShow: userValute });
   } catch (error) {
     console.error('[Error] Full error:', error);
     res.status(500).json({
@@ -1243,59 +1260,68 @@ app.get('/api/admin_get_orders', async (req, res) => {
 
     // Обогащаем данные о заказах для админки
     const ordersWithDetails = orders.map((order) => {
-      const goodsWithDetails = order.goods.map((item) => {
-        const good = item.itemId;
-        if (!good) return null;
+      const goodsWithDetails = order.goods
+        .map((item) => {
+          const good = item.itemId;
+          if (!good) return null;
 
-        return {
-          ...item,
-          name_en: good.name_en,
-          name_de: good.name_de,
-          name_ru: good.name_ru,
-          price_eu: good.price_eu,
-          delivery_price_de: good.delivery_price_de,
-          delivery_price_inEu: good.delivery_price_inEu,
-          delivery_price_outEu: good.delivery_price_outEu,
-          file: good.file,
-        };
-      }).filter(item => item !== null);
+          return {
+            ...item,
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: good.price_eu,
+            delivery_price_de: good.delivery_price_de,
+            delivery_price_inEu: good.delivery_price_inEu,
+            delivery_price_outEu: good.delivery_price_outEu,
+            file: good.file,
+          };
+        })
+        .filter((item) => item !== null);
 
       // Рассчитываем общую стоимость заказа
       const totalAmount = goodsWithDetails.reduce((sum, item) => {
         const itemPrice = Number(item.price_eu) || 0;
-        const deliveryPrice = Number(item[`delivery_price_${order.regionDelivery}`]) || 0;
+        const deliveryPrice =
+          Number(item[`delivery_price_${order.regionDelivery}`]) || 0;
         const quantity = Number(item.qty) || 0;
-        
-        return sum + ((itemPrice + deliveryPrice) * quantity);
+
+        return sum + (itemPrice + deliveryPrice) * quantity;
       }, 0);
 
       const qtyItemsInOrder = goodsWithDetails.length;
 
       // Форматируем дату
-      const formattedDate = new Date(order.createdAt).toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const formattedDate = new Date(order.createdAt).toLocaleDateString(
+        'en-GB',
+        {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }
+      );
 
       return {
         ...order,
         goods: goodsWithDetails,
         totalAmount: totalAmount,
         qtyItemsInOrder: qtyItemsInOrder,
-        formattedDate: formattedDate
+        formattedDate: formattedDate,
       };
     });
 
     const qtyOrders = orders.length;
-    const grandTotal = ordersWithDetails.reduce((sum, order) => sum + order.totalAmount, 0);
+    const grandTotal = ordersWithDetails.reduce(
+      (sum, order) => sum + order.totalAmount,
+      0
+    );
 
     res.json({
       orders: ordersWithDetails,
       qtyOrders,
-      grandTotal
+      grandTotal,
     });
   } catch (error) {
     console.error('[Error] Full error:', error);
@@ -1306,21 +1332,18 @@ app.get('/api/admin_get_orders', async (req, res) => {
   }
 });
 
-
 // создать статусы заказов
 
 app.post('/api/admin_create_orderstatus', async (req, res) => {
-
   const document = new OrdersStatusSchema({
-      name_de: 'fertig',
-      name_en: 'done',
-      name_ru: 'доставлен',
-      numForFilter: 4
-      
-    });
+    name_de: 'fertig',
+    name_en: 'done',
+    name_ru: 'доставлен',
+    numForFilter: 4,
+  });
 
-    await document.save();
-})
+  await document.save();
+});
 
 // получить все статусы заказов - admin
 app.get('/api/admin_get_order_statuses', async (req, res) => {
@@ -1342,9 +1365,9 @@ app.post('/api/admin_update_order_status', async (req, res) => {
     const { orderId, statusId } = req.body;
 
     if (!orderId || !statusId) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'orderId and statusId are required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'orderId and statusId are required',
       });
     }
 
@@ -1355,16 +1378,16 @@ app.post('/api/admin_update_order_status', async (req, res) => {
     ).populate('orderStatus');
 
     if (!result) {
-      return res.status(404).json({ 
-        status: 'error', 
-        message: 'Order not found' 
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found',
       });
     }
 
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       message: 'Order status updated successfully',
-      order: result
+      order: result,
     });
   } catch (error) {
     console.error('[Error] Full error:', error);
@@ -1381,9 +1404,9 @@ app.post('/api/create_payment_session', async (req, res) => {
     const { cart, deliveryInfo, totalSum, region, tlgid } = req.body;
 
     if (!cart || !deliveryInfo || !totalSum || !tlgid) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Cart, delivery info, total sum and tlgid are required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Cart, delivery info, total sum and tlgid are required',
       });
     }
 
@@ -1391,7 +1414,7 @@ app.post('/api/create_payment_session', async (req, res) => {
     const lineItems = cart.map((item) => {
       const itemPrice = Number(item.price_eu);
       const deliveryPrice = Number(item[`deliveryPriceEU_${region}`]);
-      const totalItemPrice = (itemPrice + deliveryPrice)*item.qty * 100; // Stripe работает в центах
+      const totalItemPrice = (itemPrice + deliveryPrice) * item.qty * 100; // Stripe работает в центах
 
       return {
         price_data: {
@@ -1406,8 +1429,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       };
     });
 
-    console.log('lineItems',lineItems )
-    
+    console.log('lineItems', lineItems);
 
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -1415,7 +1437,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       line_items: lineItems,
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/#/cancellpay-page`, 
+      cancel_url: `${process.env.FRONTEND_URL}/#/cancellpay-page`,
       metadata: {
         tlgid: tlgid.toString(),
         deliveryInfo: JSON.stringify(deliveryInfo),
@@ -1436,7 +1458,7 @@ app.post('/api/create_payment_session', async (req, res) => {
         name_en: 'new',
         name_ru: 'новый',
         name_de: 'neu',
-        numForFilter: 1
+        numForFilter: 1,
       });
       await defaultStatus.save();
     }
@@ -1447,7 +1469,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       jbid: jbid,
       goods: cart.map((item) => ({
         itemId: item.itemId,
-        qty: item.qty
+        qty: item.qty,
       })),
       country: deliveryInfo.selectedCountry.name_en,
       regionDelivery: region,
@@ -1456,7 +1478,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       name: deliveryInfo.userName,
       orderStatus: defaultStatus._id,
       payStatus: false, // Будет изменено на true через webhook
-      stripeSessionId: session.id // Сохраняем session ID для webhook
+      stripeSessionId: session.id, // Сохраняем session ID для webhook
     });
 
     await newOrder.save();
@@ -1464,11 +1486,11 @@ app.post('/api/create_payment_session', async (req, res) => {
     // Удаляем корзину пользователя
     await CartsModel.deleteOne({ tlgid: tlgid });
 
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       sessionId: session.id,
       url: session.url,
-      orderId: newOrder._id
+      orderId: newOrder._id,
     });
   } catch (error) {
     console.error('[Stripe Error] Full error:', error);
@@ -1485,9 +1507,9 @@ app.post('/api/repay_order', async (req, res) => {
     const { orderId, tlgid } = req.body;
 
     if (!orderId || !tlgid) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Order ID and tlgid are required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Order ID and tlgid are required',
       });
     }
 
@@ -1497,25 +1519,25 @@ app.post('/api/repay_order', async (req, res) => {
       .lean();
 
     if (!order) {
-      return res.status(404).json({ 
-        status: 'error', 
-        message: 'Order not found' 
+      return res.status(404).json({
+        status: 'error',
+        message: 'Order not found',
       });
     }
 
     // Проверяем, что заказ принадлежит пользователю
     if (order.tlgid !== tlgid) {
-      return res.status(403).json({ 
-        status: 'error', 
-        message: 'Access denied' 
+      return res.status(403).json({
+        status: 'error',
+        message: 'Access denied',
       });
     }
 
     // Если заказ уже оплачен, возвращаем ошибку
     if (order.payStatus === true) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Order is already paid' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Order is already paid',
       });
     }
 
@@ -1523,8 +1545,10 @@ app.post('/api/repay_order', async (req, res) => {
     const lineItems = order.goods.map((item) => {
       const good = item.itemId;
       const itemPrice = Number(good.price_eu);
-      const deliveryPrice = Number(good[`delivery_price_${order.regionDelivery}`]);
-      const totalItemPrice = (itemPrice + deliveryPrice)*item.qty * 100; // Stripe работает в копейках/центах
+      const deliveryPrice = Number(
+        good[`delivery_price_${order.regionDelivery}`]
+      );
+      const totalItemPrice = (itemPrice + deliveryPrice) * item.qty * 100; // Stripe работает в копейках/центах
 
       return {
         price_data: {
@@ -1545,24 +1569,24 @@ app.post('/api/repay_order', async (req, res) => {
       line_items: lineItems,
       mode: 'payment',
       success_url: `${process.env.FRONTEND_URL}/#/success-page?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/#/orders`, 
+      cancel_url: `${process.env.FRONTEND_URL}/#/orders`,
       metadata: {
         orderId: orderId,
         tlgid: tlgid.toString(),
-        repayment: 'true'
+        repayment: 'true',
       },
     });
 
     // Обновляем stripeSessionId в существующем заказе
     await OrdersModel.findByIdAndUpdate(orderId, {
-      stripeSessionId: session.id
+      stripeSessionId: session.id,
     });
 
-    res.json({ 
-      status: 'ok', 
+    res.json({
+      status: 'ok',
       sessionId: session.id,
       url: session.url,
-      orderId: orderId
+      orderId: orderId,
     });
   } catch (error) {
     console.error('[Repay Order Error] Full error:', error);
@@ -1579,9 +1603,9 @@ app.get('/api/user_get_profile', async (req, res) => {
     const { tlgid } = req.query;
 
     if (!tlgid) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'tlgid is required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'tlgid is required',
       });
     }
 
@@ -1589,9 +1613,9 @@ app.get('/api/user_get_profile', async (req, res) => {
     const user = await UserModel.findOne({ tlgid: Number(tlgid) }).lean();
 
     if (!user) {
-      return res.status(404).json({ 
-        status: 'error', 
-        message: 'User not found' 
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
       });
     }
 
@@ -1601,8 +1625,8 @@ app.get('/api/user_get_profile', async (req, res) => {
         tlgid: user.tlgid,
         name: user.name || '',
         phone: user.phone || '',
-        adress: user.adress || '' // Keeping original spelling
-      }
+        adress: user.adress || '', // Keeping original spelling
+      },
     });
   } catch (error) {
     console.error('[Get User Profile Error]:', error);
@@ -1619,29 +1643,29 @@ app.post('/api/user_update_profile', async (req, res) => {
     const { tlgid, name, phone, adress } = req.body;
 
     if (!tlgid) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'tlgid is required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'tlgid is required',
       });
     }
 
     // Обновляем пользователя в базе данных
     const updatedUser = await UserModel.findOneAndUpdate(
       { tlgid: Number(tlgid) },
-      { 
+      {
         $set: {
           ...(name !== undefined && { name }),
           ...(phone !== undefined && { phone }),
-          ...(adress !== undefined && { adress })
-        }
+          ...(adress !== undefined && { adress }),
+        },
       },
       { new: true }
     );
 
     if (!updatedUser) {
-      return res.status(404).json({ 
-        status: 'error', 
-        message: 'User not found' 
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
       });
     }
 
@@ -1652,8 +1676,8 @@ app.post('/api/user_update_profile', async (req, res) => {
         tlgid: updatedUser.tlgid,
         name: updatedUser.name || '',
         phone: updatedUser.phone || '',
-        adress: updatedUser.adress || ''
-      }
+        adress: updatedUser.adress || '',
+      },
     });
   } catch (error) {
     console.error('[Update User Profile Error]:', error);
