@@ -1365,7 +1365,7 @@ app.get('/api/admin_get_order_statuses', async (req, res) => {
 // обновить статус заказа - admin
 app.post('/api/admin_update_order_status', async (req, res) => {
   try {
-    const { orderId, statusId } = req.body;
+    const { orderId, statusId, eta } = req.body;
 
     if (!orderId || !statusId) {
       return res.status(400).json({
@@ -1374,9 +1374,17 @@ app.post('/api/admin_update_order_status', async (req, res) => {
       });
     }
 
+    // Подготавливаем объект для обновления
+    const updateData = { orderStatus: statusId };
+    
+    // Если передана eta, добавляем её в объект обновления
+    if (eta !== undefined) {
+      updateData.eta = eta;
+    }
+
     const result = await OrdersModel.findOneAndUpdate(
       { _id: orderId },
-      { $set: { orderStatus: statusId } },
+      { $set: updateData },
       { new: true }
     ).populate('orderStatus');
 

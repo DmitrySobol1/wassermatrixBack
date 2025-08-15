@@ -42,6 +42,10 @@ const OrdersSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    eta: {
+      type: String,
+      default: ''
+    }
     
   },
   {
