@@ -9,6 +9,7 @@ import CountriesForDeliveryModel from './models/countriesForDelivery.js';
 import OrdersModel from './models/orders.js';
 import OrdersStatusSchema from './models/ordersStatus.js';
 import ReceiptsModel from './models/receipts.js';
+import SaleModel from './models/sale.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -235,15 +236,6 @@ app.post('/api/admin_add_new_good', upload.single('file'), async (req, res) => {
       delivery_price_outEu,
     } = req.body;
 
-    // if (!title) {
-    //   console.error('[Validation] title is required');
-    //   return res.status(400).json({ error: 'title is required' });
-    // }
-
-    // if (!description) {
-    //   console.error('[Validation] description is required');
-    //   return res.status(400).json({ error: 'description is required' });
-    // }
 
     console.log('[Database] Creating document record...');
     const document = new GoodsModel({
@@ -284,35 +276,190 @@ app.post('/api/admin_add_new_good', upload.single('file'), async (req, res) => {
   }
 });
 
-// создать новый товар - OLD version (без добавления картинки)
-// app.post('/api/admin_add_new_good', async (req, res) => {
-//   try {
-//     const doc = new GoodsModel({
-//       article: req.body.article,
-//       name_ru: req.body.name_ru,
-//       name_en: req.body.name_en,
-//       name_de: req.body.name_de,
 
-//       description_short_en: req.body.description_short_en,
-//       description_short_de: req.body.description_short_de,
-//       description_short_ru: req.body.description_short_ru,
 
-//       description_long_en: req.body.description_long_en,
-//       description_long_de: req.body.description_long_de,
-//       description_long_ru: req.body.description_long_ru,
 
-//       price_eu: req.body.price_eu,
-//       img: req.body.img,
-//       type: req.body.type,
-//     });
+// создать новую акцию
+app.post('/api/admin_add_new_sale', upload.single('file'), async (req, res) => {
+  console.log('[Request] Received upload request');
 
-//     await doc.save();
+  try {
+    console.log('[Request] Body:', req.body);
+    console.log('[Request] File:', req.file);
 
-//     return res.json({ status: 'ok', result: 'new good added' });
-//   } catch (err) {
-//     console.log(err);
-//   }
-// });
+    if (!req.file) {
+      console.error('[Validation] No file uploaded');
+      return res.status(400).json({ error: 'Please upload a file' });
+    }
+
+    const {
+      title_de,
+      title_en,
+      title_ru,
+      subtitle_de,
+      subtitle_en,
+      subtitle_ru,
+      info_de,
+      info_en,
+      info_ru,
+      dateUntil,
+      buttonText_de,
+      buttonText_en,
+      buttonText_ru,
+      good,
+      isShowButton
+    } = req.body;
+
+
+    console.log('[Database] Creating document record...');
+    const document = new SaleModel({
+      title_de,
+      title_en,
+      title_ru,
+      subtitle_de,
+      subtitle_en,
+      subtitle_ru,
+      info_de,
+      info_en,
+      info_ru,
+      dateUntil,
+      buttonText_de,
+      buttonText_en,
+      buttonText_ru,
+      good,
+      isShowButton: isShowButton === 'true', // конвертируем строку в boolean
+      file: {
+        filename: req.file.filename,
+        contentType: req.file.mimetype,
+        size: req.file.size,
+        url: `/uploads/${req.file.filename}`,
+      },
+    });
+
+    const savedDoc = await document.save();
+    console.log('[Database] Document saved:', savedDoc);
+
+    res.status(201).json(savedDoc);
+  } catch (error) {
+    console.error('[Error] Full error:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// получить все акции
+app.get('/api/admin_get_sales', async (req, res) => {
+  try {
+    const sales = await SaleModel.find().populate('good');
+    console.log('[Database] Sales fetched:', sales.length);
+    res.json(sales);
+  } catch (error) {
+    console.error('[Error] Failed to fetch sales:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// удалить акцию
+app.post('/api/admin_delete_sale', async (req, res) => {
+  try {
+    const { id } = req.body;
+    console.log('[Database] Deleting sale with ID:', id);
+    
+    const result = await SaleModel.findByIdAndDelete(id);
+    
+    if (result) {
+      console.log('[Database] Sale deleted successfully');
+      res.json({ status: 'ok', message: 'Sale deleted successfully' });
+    } else {
+      res.status(404).json({ status: 'error', message: 'Sale not found' });
+    }
+  } catch (error) {
+    console.error('[Error] Failed to delete sale:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// обновить акцию
+app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
+  try {
+    const {
+      id,
+      title_de,
+      title_en,
+      title_ru,
+      subtitle_de,
+      subtitle_en,
+      subtitle_ru,
+      info_de,
+      info_en,
+      info_ru,
+      dateUntil,
+      buttonText_de,
+      buttonText_en,
+      buttonText_ru,
+      good,
+      isShowButton
+    } = req.body;
+
+    console.log('[Database] Updating sale with ID:', id);
+
+    const updateData = {
+      title_de,
+      title_en,
+      title_ru,
+      subtitle_de,
+      subtitle_en,
+      subtitle_ru,
+      info_de,
+      info_en,
+      info_ru,
+      dateUntil,
+      buttonText_de,
+      buttonText_en,
+      buttonText_ru,
+      good,
+      isShowButton: isShowButton === 'true'
+    };
+
+    // Если загружен новый файл, обновляем информацию о файле
+    if (req.file) {
+      updateData.file = {
+        filename: req.file.filename,
+        contentType: req.file.mimetype,
+        size: req.file.size,
+        url: `/uploads/${req.file.filename}`,
+      };
+    }
+
+    const updatedSale = await SaleModel.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedSale) {
+      return res.status(404).json({ error: 'Sale not found' });
+    }
+
+    console.log('[Database] Sale updated successfully');
+    res.json({ status: 'ok', sale: updatedSale });
+  } catch (error) {
+    console.error('[Error] Failed to update sale:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
 
 // создать новый тип товара
 app.post('/api/admin_add_new_goodstype', async (req, res) => {
@@ -1729,6 +1876,34 @@ app.get('/api/get_receipt', async (req, res) => {
 
   } catch (error) {
     console.error('[Error] Get receipt error:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// получить данные об акции
+app.get('/api/get_sale_info', async (req, res) => {
+  try {
+    // Получаем последнюю созданную акцию с данными о товаре
+    const sale = await SaleModel.findOne()
+      .populate('good')
+      .sort({ createdAt: -1 });
+
+    if (!sale) {
+      return res
+        .status(404)
+        .json({ status: 'error', message: 'Sale not found' });
+    }
+
+    res.json({ 
+      status: 'ok', 
+      sale: sale 
+    });
+
+  } catch (error) {
+    console.error('[Error] Get sale info error:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,
