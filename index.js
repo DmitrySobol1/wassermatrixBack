@@ -310,6 +310,9 @@ app.post('/api/admin_add_new_sale', upload.single('file'), async (req, res) => {
       isShowButton
     } = req.body;
 
+    // Если good не передан или пустой, устанавливаем null
+    const goodValue = good && good.trim() !== '' ? good : null;
+
 
     console.log('[Database] Creating document record...');
     const document = new SaleModel({
@@ -326,8 +329,8 @@ app.post('/api/admin_add_new_sale', upload.single('file'), async (req, res) => {
       buttonText_de,
       buttonText_en,
       buttonText_ru,
-      good,
-      isShowButton: isShowButton === 'true', // конвертируем строку в boolean
+      good: goodValue,
+      isShowButton: isShowButton === 'true',
       file: {
         filename: req.file.filename,
         contentType: req.file.mimetype,
@@ -412,6 +415,9 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
 
     console.log('[Database] Updating sale with ID:', id);
 
+    // Если good не передан или пустой, устанавливаем null
+    const goodValue = good && good.trim() !== '' ? good : null;
+
     const updateData = {
       title_de,
       title_en,
@@ -426,7 +432,7 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
       buttonText_de,
       buttonText_en,
       buttonText_ru,
-      good,
+      good: goodValue,
       isShowButton: isShowButton === 'true'
     };
 
