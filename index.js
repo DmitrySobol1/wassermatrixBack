@@ -10,6 +10,7 @@ import OrdersModel from './models/orders.js';
 import OrdersStatusSchema from './models/ordersStatus.js';
 import ReceiptsModel from './models/receipts.js';
 import SaleModel from './models/sale.js';
+import TagsModel from './models/tags.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -171,11 +172,22 @@ app.post('/api/enter', async (req, res) => {
   try {
     const user = await UserModel.findOne({ tlgid: req.body.tlgid });
 
+     console.log('jbid',req.body.jbid ) 
+
     //создание юзера
     if (!user) {
       await createNewUser(req.body.tlgid, req.body.jbid);
       const userData = { result: 'showOnboarding' };
       return res.json({ userData });
+    }
+
+    if (!user.jbid){
+      // Обновляем jbid для существующего пользователя
+      await UserModel.updateOne(
+        { tlgid: req.body.tlgid },
+        { jbid: req.body.jbid }
+      );
+      console.log('Updated jbid for existing user:', req.body.tlgid, 'with jbid:', req.body.jbid);
     }
 
     // извлечь инфо о юзере из БД и передать на фронт действие
@@ -368,6 +380,175 @@ app.get('/api/admin_get_sales', async (req, res) => {
   }
 });
 
+// получить все теги
+app.get('/api/admin_get_tags', async (req, res) => {
+  try {
+    const tags = await TagsModel.find().sort({ createdAt: -1 });
+    console.log('[Database] Tags fetched:', tags.length);
+    res.json(tags);
+  } catch (error) {
+    console.error('[Error] Failed to fetch tags:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// создать новый тег
+app.post('/api/admin_add_tag', async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    
+    if (!name || name.trim() === '') {
+      return res.status(400).json({
+        error: 'Tag name is required',
+      });
+    }
+
+    if (!description || description.trim() === '') {
+      return res.status(400).json({
+        error: 'Tag description is required',
+      });
+    }
+
+    // Проверяем, не существует ли уже тег с таким именем
+    const existingTag = await TagsModel.findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } 
+    });
+
+    if (existingTag) {
+      return res.status(400).json({
+        error: 'Tag with this name already exists',
+      });
+    }
+
+    const newTag = new TagsModel({
+      name: name.trim(),
+      description: description.trim()
+    });
+
+    const savedTag = await newTag.save();
+    console.log('[Database] New tag created:', savedTag.name);
+    
+    res.json({
+      status: 'ok',
+      tag: savedTag
+    });
+  } catch (error) {
+    console.error('[Error] Failed to create tag:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// обновить тег
+app.post('/api/admin_update_tag', async (req, res) => {
+  try {
+    const { id, name, description } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        error: 'Tag ID is required',
+      });
+    }
+
+    if (!name || name.trim() === '') {
+      return res.status(400).json({
+        error: 'Tag name is required',
+      });
+    }
+
+    if (!description || description.trim() === '') {
+      return res.status(400).json({
+        error: 'Tag description is required',
+      });
+    }
+
+    // Проверяем, не существует ли уже тег с таким именем (исключая текущий)
+    const existingTag = await TagsModel.findOne({ 
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+      _id: { $ne: id } 
+    });
+
+    if (existingTag) {
+      return res.status(400).json({
+        error: 'Tag with this name already exists',
+      });
+    }
+
+    console.log('[Database] Updating tag with ID:', id);
+    
+    const updatedTag = await TagsModel.findByIdAndUpdate(
+      id,
+      { 
+        name: name.trim(),
+        description: description.trim()
+      },
+      { new: true } // Возвращаем обновленный документ
+    );
+    
+    if (!updatedTag) {
+      return res.status(404).json({
+        error: 'Tag not found',
+      });
+    }
+
+    console.log('[Database] Tag updated successfully:', updatedTag.name);
+    
+    res.json({
+      status: 'ok',
+      message: 'Tag updated successfully',
+      tag: updatedTag
+    });
+  } catch (error) {
+    console.error('[Error] Failed to update tag:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// удалить тег
+app.post('/api/admin_delete_tag', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        error: 'Tag ID is required',
+      });
+    }
+
+    console.log('[Database] Deleting tag with ID:', id);
+    
+    const result = await TagsModel.findByIdAndDelete(id);
+    
+    if (!result) {
+      return res.status(404).json({
+        error: 'Tag not found',
+      });
+    }
+
+    console.log('[Database] Tag deleted successfully:', result.name);
+    
+    res.json({
+      status: 'ok',
+      message: 'Tag deleted successfully',
+      deletedTag: result
+    });
+  } catch (error) {
+    console.error('[Error] Failed to delete tag:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
 // удалить акцию
 app.post('/api/admin_delete_sale', async (req, res) => {
   try {
@@ -460,6 +641,62 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
     res.json({ status: 'ok', sale: updatedSale });
   } catch (error) {
     console.error('[Error] Failed to update sale:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// получить всех пользователей
+app.get('/api/admin_get_users', async (req, res) => {
+  try {
+    const users = await UserModel.find().populate('tags');
+    console.log('[Database] Users fetched:', users.length);
+    res.json(users);
+  } catch (error) {
+    console.error('[Error] Failed to fetch users:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// обновить теги пользователя
+app.post('/api/admin_update_user_tags', async (req, res) => {
+  try {
+    const { userId, tagIds } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (!Array.isArray(tagIds)) {
+      return res.status(400).json({ error: 'Tag IDs must be an array' });
+    }
+
+    // Проверяем, что все теги существуют
+    const existingTags = await TagsModel.find({ _id: { $in: tagIds } });
+    if (existingTags.length !== tagIds.length) {
+      return res.status(400).json({ error: 'One or more tags do not exist' });
+    }
+
+    // Обновляем пользователя
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { tags: tagIds },
+      { new: true }
+    ).populate('tags');
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('[Database] User tags updated:', updatedUser._id);
+    res.json({ status: 'ok', user: updatedUser });
+  } catch (error) {
+    console.error('[Error] Failed to update user tags:', error);
     res.status(500).json({
       error: 'Server error',
       details: error.message,

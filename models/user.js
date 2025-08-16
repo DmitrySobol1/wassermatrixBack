@@ -22,6 +22,10 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    tags: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Tags'
+    }],
   },
   {
     timestamps: true,
