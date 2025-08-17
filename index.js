@@ -83,6 +83,22 @@ app.post(
             console.log(
               `Order ${updatedOrder._id} payment status updated to true`
             );
+
+            // Обновляем quantityOfPurchases для каждого товара в заказе
+            if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
+              for (const item of updatedOrder.goods) {
+                try {
+                  await GoodsModel.findByIdAndUpdate(
+                    item.itemId,
+                    { $inc: { quantityOfPurchases: item.qty } },
+                    { new: true }
+                  );
+                  console.log(`Updated quantityOfPurchases for item ${item.itemId} by ${item.qty}`);
+                } catch (itemError) {
+                  console.error(`Error updating quantityOfPurchases for item ${item.itemId}:`, itemError);
+                }
+              }
+            }
           } else {
             console.log(`Order with session ID ${session.id} not found`);
           }

@@ -27,6 +27,10 @@ const GoodsSchema = new mongoose.Schema(
     delivery_price_de: Number, 
     delivery_price_inEu: Number, 
     delivery_price_outEu: Number, 
+    quantityOfPurchases: {
+      type: Number,
+      default: 0
+    },
     file: {
       filename: String,
       contentType: String,
