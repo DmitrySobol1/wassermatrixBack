@@ -278,6 +278,7 @@ app.post('/api/admin_add_new_good', upload.single('file'), async (req, res) => {
       description_long_de,
       description_long_ru,
       price_eu,
+      priceToShow_eu: price_eu,
       type,
       delivery_price_de,
       delivery_price_inEu,
@@ -720,6 +721,107 @@ app.post('/api/admin_update_user_tags', async (req, res) => {
   }
 });
 
+// обновить информацию о специальном предложении товара
+app.post('/api/admin_update_sale_info', async (req, res) => {
+  try {
+    const { goodId, saleValue, infoForFront_de, infoForFront_en, infoForFront_ru } = req.body;
+
+    if (!goodId) {
+      return res.status(400).json({ error: 'Good ID is required' });
+    }
+
+    if (!saleValue || isNaN(Number(saleValue)) || Number(saleValue) <= 0) {
+      return res.status(400).json({ error: 'Sale value must be a positive number' });
+    }
+
+    // Получаем текущий товар для расчета новой цены
+    const currentGood = await GoodsModel.findById(goodId);
+    if (!currentGood) {
+      return res.status(404).json({ error: 'Good not found' });
+    }
+
+    // Рассчитываем новую цену: price_eu - (price_eu * saleValue) / 100
+    const originalPrice = currentGood.price_eu;
+    const discount = (originalPrice * Number(saleValue)) / 100;
+    const newPrice = originalPrice - discount;
+
+    // Обновляем товар
+    const updatedGood = await GoodsModel.findByIdAndUpdate(
+      goodId,
+      {
+        isSaleNow: true,
+        priceToShow_eu: newPrice,
+        saleInfo: {
+          saleValue: Number(saleValue),
+          infoForFront_de: infoForFront_de || '',
+          infoForFront_en: infoForFront_en || '',
+          infoForFront_ru: infoForFront_ru || ''
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedGood) {
+      return res.status(404).json({ error: 'Good not found' });
+    }
+
+    console.log('[Database] Good sale info updated:', updatedGood._id);
+    res.json({ status: 'ok', good: updatedGood });
+  } catch (error) {
+    console.error('[Error] Failed to update good sale info:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// отменить специальное предложение товара
+app.post('/api/admin_cancel_sale_offer', async (req, res) => {
+  try {
+    const { goodId } = req.body;
+
+    if (!goodId) {
+      return res.status(400).json({ error: 'Good ID is required' });
+    }
+
+    // Получаем текущий товар
+    const currentGood = await GoodsModel.findById(goodId);
+    if (!currentGood) {
+      return res.status(404).json({ error: 'Good not found' });
+    }
+
+    // Возвращаем оригинальную цену и отменяем акцию
+    const updatedGood = await GoodsModel.findByIdAndUpdate(
+      goodId,
+      {
+        isSaleNow: false,
+        priceToShow_eu: currentGood.price_eu, // Возвращаем оригинальную цену
+        saleInfo: {
+          saleValue: null,
+          infoForFront_de: null,
+          infoForFront_en: null,
+          infoForFront_ru: null
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedGood) {
+      return res.status(404).json({ error: 'Good not found' });
+    }
+
+    console.log('[Database] Good sale offer cancelled:', updatedGood._id);
+    res.json({ status: 'ok', good: updatedGood });
+  } catch (error) {
+    console.error('[Error] Failed to cancel sale offer:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
 // создать новый тип товара
 app.post('/api/admin_add_new_goodstype', async (req, res) => {
   try {
@@ -795,22 +897,17 @@ app.get('/api/user_get_goods', async (req, res) => {
     const user = await UserModel.findOne({ tlgid: req.query.tlgid });
     const userValute = user.valute;
 
-    // $ € ₽
-
-    //FIXME: создать функцию по запросу стоимости валют
-    // const EXCHANGE_RATES = {
-    //   '€': 1,
-    //   '$': 1.07,
-    //   '₽': 100
-    // };
 
     const exchangeRates = await currencyConverter();
 
     const newGoods = goods.map((good) => ({
       ...good,
       valuteToShow: userValute,
-      priceToShow: parseFloat(
+      basePriceToShowClientValute:parseFloat(
         (good.price_eu * exchangeRates[userValute]).toFixed(0)
+      ), 
+      priceToShow: parseFloat(
+        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(0)
       ),
     }));
 
@@ -847,7 +944,7 @@ app.get('/api/user_get_currentgood', async (req, res) => {
       ...good,
       valuteToShow: userValute,
       priceToShow: parseFloat(
-        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(0)
       ),
     };
 
@@ -1216,7 +1313,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
             console.warn(`Товар с ID ${item.itemId} не найден`);
             return null;
           }
-          const itemPrice = Number(good.price_eu);
+          const itemPrice = Number(good.priceToShow_eu);
           const convertedPrice = Number(
             itemPrice * exchangeRates[userValute]
           ).toFixed(0);

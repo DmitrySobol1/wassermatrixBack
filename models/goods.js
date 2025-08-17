@@ -21,6 +21,29 @@ const GoodsSchema = new mongoose.Schema(
     description_long_ru: String,
 
     price_eu: Number,
+    priceToShow_eu: Number, // add
+    isSaleNow: {            // add
+      type: Boolean,
+      default: false
+    },
+    saleInfo: {                 // add
+      saleValue: {
+        type: Number,
+        default: 0
+      },
+      infoForFront_de: {
+        type: String,
+        default: ''
+      },
+      infoForFront_en: {
+        type: String,
+        default: ''
+      },
+      infoForFront_ru: {
+        type: String,
+        default: ''
+      }
+    },
     img: String,
     type: String,
 
