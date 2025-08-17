@@ -904,10 +904,10 @@ app.get('/api/user_get_goods', async (req, res) => {
       ...good,
       valuteToShow: userValute,
       basePriceToShowClientValute:parseFloat(
-        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+        (good.price_eu * exchangeRates[userValute]).toFixed(2)
       ), 
       priceToShow: parseFloat(
-        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(0)
+        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(2)
       ),
     }));
 
@@ -1316,7 +1316,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
           const itemPrice = Number(good.priceToShow_eu);
           const convertedPrice = Number(
             itemPrice * exchangeRates[userValute]
-          ).toFixed(0);
+          ).toFixed(2);
           const itemQty = Number(item.qty);
 
           const deliveryPriceDe = Number(good.delivery_price_de);
@@ -1333,6 +1333,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
             deliveryPriceOutEu * exchangeRates[userValute]
           ).toFixed(2);
 
+
           return {
             name_en: good.name_en,
             name_de: good.name_de,
@@ -1348,8 +1349,10 @@ app.get('/api/user_get_mycart', async (req, res) => {
             qty: itemQty,
             itemId: item.itemId,
             img: good.file?.url || null,
-            totalpriceItem: convertedPrice * itemQty,
+            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
             valuteToShow: userValute,
+            isSaleNow: good.isSaleNow,
+            
           };
         } catch (error) {
           console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
@@ -1364,7 +1367,7 @@ app.get('/api/user_get_mycart', async (req, res) => {
     // Рассчитываем общее количество товаров и общую сумму
     const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
     const totalPrice = filteredGoods.reduce(
-      (sum, item) => sum + item.totalpriceItem,
+      (sum, item) => sum + Number(item.totalpriceItem),
       0
     );
 
@@ -1709,10 +1712,11 @@ app.get('/api/user_get_my_orders', async (req, res) => {
           const good = item.itemId;
           if (!good) return null;
 
-          const itemPrice = Number(good.price_eu) || 0;
+          // const itemPrice = Number(good.price_eu) || 0;
+          const itemPrice = Number(item.actualPurchasePriceInEu) || 0;
           const convertedPrice = Number(
             itemPrice * exchangeRates[userValute]
-          ).toFixed(0);
+          ).toFixed(2);
 
           // Получаем цену доставки в зависимости от regionDelivery
           const deliveryPriceEur =
@@ -1984,6 +1988,8 @@ app.post('/api/create_payment_session', async (req, res) => {
       goods: cart.map((item) => ({
         itemId: item.itemId,
         qty: item.qty,
+        actualPurchasePriceInEu: item.price_eu,
+        isPurchasedBySale: item.isSaleNow
       })),
       country: deliveryInfo.selectedCountry.name_en,
       regionDelivery: region,
@@ -2058,7 +2064,7 @@ app.post('/api/repay_order', async (req, res) => {
     // Создаем line items для Stripe из товаров заказа
     const lineItems = order.goods.map((item) => {
       const good = item.itemId;
-      const itemPrice = Number(good.price_eu);
+      const itemPrice = Number(item.actualPurchasePriceInEu);
       const deliveryPrice = Number(
         good[`delivery_price_${order.regionDelivery}`]
       );

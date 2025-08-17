@@ -19,6 +19,11 @@ const OrdersSchema = new mongoose.Schema(
         type: Number,
         required: true,
         min: 1 // Минимальное количество
+      },
+      actualPurchasePriceInEu: Number,
+      isPurchasedBySale: {
+        type: Boolean,
+        default: false
       }
     }],
     country: String,
