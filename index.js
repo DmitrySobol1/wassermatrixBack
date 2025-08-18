@@ -944,10 +944,10 @@ app.get('/api/user_get_currentgood', async (req, res) => {
       ...good,
       valuteToShow: userValute,
       basePriceToShowClientValute:parseFloat(
-        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+        (good.price_eu * exchangeRates[userValute]).toFixed(2)
       ),
       priceToShow: parseFloat(
-        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(0)
+        (good.priceToShow_eu * exchangeRates[userValute]).toFixed(2)
       ),
     };
 
