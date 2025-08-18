@@ -943,6 +943,9 @@ app.get('/api/user_get_currentgood', async (req, res) => {
     const newGood = {
       ...good,
       valuteToShow: userValute,
+      basePriceToShowClientValute:parseFloat(
+        (good.price_eu * exchangeRates[userValute]).toFixed(0)
+      ),
       priceToShow: parseFloat(
         (good.priceToShow_eu * exchangeRates[userValute]).toFixed(0)
       ),
@@ -1768,12 +1771,28 @@ app.get('/api/admin_get_orders', async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
+    // console.log("ORDERS", orders.goods)
+
     // Обогащаем данные о заказах для админки
     const ordersWithDetails = orders.map((order) => {
       const goodsWithDetails = order.goods
         .map((item) => {
           const good = item.itemId;
-          if (!good) return null;
+          if (!good) {
+            // Если товар был удален, возвращаем базовую информацию
+            return {
+              ...item,
+              name_en: 'Deleted product',
+              name_de: 'Gelöschtes Produkt',
+              name_ru: 'Удаленный товар',
+              price_eu: item.actualPurchasePriceInEu || 0,
+              actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
+              delivery_price_de: 0,
+              delivery_price_inEu: 0,
+              delivery_price_outEu: 0,
+              file: { url: '/uploads/deleted-product.png' },
+            };
+          }
 
           return {
             ...item,
@@ -1781,17 +1800,18 @@ app.get('/api/admin_get_orders', async (req, res) => {
             name_de: good.name_de,
             name_ru: good.name_ru,
             price_eu: good.price_eu,
+            actualPurchasePriceInEu: item.actualPurchasePriceInEu || good.price_eu,
             delivery_price_de: good.delivery_price_de,
             delivery_price_inEu: good.delivery_price_inEu,
             delivery_price_outEu: good.delivery_price_outEu,
             file: good.file,
           };
-        })
-        .filter((item) => item !== null);
+        });
 
       // Рассчитываем общую стоимость заказа
       const totalAmount = goodsWithDetails.reduce((sum, item) => {
-        const itemPrice = Number(item.price_eu) || 0;
+        // const itemPrice = Number(item.price_eu) || 0;
+        const itemPrice = Number(item.actualPurchasePriceInEu) || 0;
         const deliveryPrice =
           Number(item[`delivery_price_${order.regionDelivery}`]) || 0;
         const quantity = Number(item.qty) || 0;
