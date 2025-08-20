@@ -2648,7 +2648,90 @@ export async function sendTlgMessageToAdmins(messageText = 'New order is payed')
   }
 }
 
+app.post('/api/user_sendTlgMessage', async (req, res) => {
+  try {
+    const { tlgid, eta, orderId } = req.body;
 
+    // Проверка обязательных параметров
+    if (!tlgid || !eta || !orderId) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid, eta and orderId are required'
+      });
+    }
+    
+    // console.log(`Отправка уведомления о доставке клиенту: tlgid=${tlgid}, eta=${eta}, orderId=${orderId}`);
+    
+    // Получаем язык пользователя из БД
+    const user = await UserModel.findOne({ tlgid: tlgid });
+    const language = user?.language || 'en'; // По умолчанию английский
+    
+    console.log(`Пользователь найден, язык: ${language}`);
+    
+    // Форматируем дату в формат dd.mm.yy
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = String(date.getFullYear()).slice(-2);
+      return `${day}.${month}.${year}`;
+    };
+    
+    const formattedEta = formatDate(eta);
+    
+    const templateText = {
+      de: `🚚 Ihre Bestellung ist unterwegs!\n\nVoraussichtliches Lieferdatum: ${formattedEta}\n\nVielen Dank für Ihren Einkauf!`,
+      en: `🚚 Your order is on the way!\n\nEstimated delivery date: ${formattedEta}\n\nThank you for your purchase!`,
+      ru: `🚚 Ваш заказ отправлен!\n\nПримерная дата доставки: ${formattedEta}\n\nСпасибо за покупку!`
+    };
+    
+    const messageText = templateText[language] || templateText['en'];
+    
+    // Отправляем сообщение через Telegram Bot API
+    const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
+    const params = `?chat_id=${tlgid}&text=${encodeURIComponent(messageText)}`;
+    const url = baseurl + params;
+    
+    const response = await axios.get(url);
+    
+    if (!response.data.ok) {
+      throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
+    }
+    
+    console.log('Сообщение успешно отправлено клиенту');
+    
+    // Обновляем статус отправки в БД
+    const updatedOrder = await OrdersModel.findByIdAndUpdate(
+      orderId,
+      { messageToClientAboutDelivery: true },
+      { new: true }
+    );
+    
+    if (!updatedOrder) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'Order not found'
+      });
+    }
+    
+    // console.log(`Обновлен статус messageToClientAboutDelivery для заказа ${orderId}`);
+    
+    res.json({
+      status: 'ok',
+      message: 'Message sent successfully',
+      order: updatedOrder
+    });
+    
+  } catch (err) {
+    console.error('Ошибка в endpoint user_sendTlgMessage:', err.message);
+    console.error('Полная информация об ошибке:', err.response?.data);
+    
+    res.status(500).json({
+      status: 'error',
+      error: err.message
+    });
+  }
+});
 
 
 /////////////////////
