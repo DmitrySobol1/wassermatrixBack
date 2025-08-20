@@ -11,6 +11,7 @@ import OrdersStatusSchema from './models/ordersStatus.js';
 import ReceiptsModel from './models/receipts.js';
 import SaleModel from './models/sale.js';
 import TagsModel from './models/tags.js';
+import AdminsListModel from './models/adminsList.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -78,6 +79,16 @@ app.post(
             },
             { new: true } 
           );
+
+          // Отправляем сообщение всем админам о новом оплаченном заказе
+          try {
+            const notificationMessage = `New order paid!\n\nOrder ID: ${updatedOrder._id}\nTotal items: ${updatedOrder.goods?.length || 0}`;
+            const notificationResult = await sendTlgMessageToAdmins(notificationMessage);
+            console.log('Результат отправки уведомлений админам:', notificationResult);
+          } catch (notificationError) {
+            console.error('Ошибка при отправке уведомления админам:', notificationError);
+          }
+
 
           if (updatedOrder) {
             console.log(
@@ -1761,6 +1772,118 @@ app.get('/api/user_get_my_orders', async (req, res) => {
   }
 });
 
+// получить заказы за период - admin
+app.get('/api/admin/orders', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let query = {
+      payStatus: true  // Только оплаченные заказы
+    };
+    
+    // Если переданы даты, фильтруем по периоду
+    if (startDate && endDate) {
+      query.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+
+    // Находим заказы с детализацией товаров и статусов
+    const orders = await OrdersModel.find(query)
+      .populate('goods.itemId')
+      .populate('orderStatus')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Обогащаем данные о заказах для админки
+    const ordersWithDetails = orders.map((order) => {
+      const goodsWithDetails = order.goods
+        .map((item) => {
+          const good = item.itemId;
+          if (!good) {
+            // Если товар был удален, возвращаем базовую информацию
+            return {
+              ...item,
+              name_en: 'Deleted product',
+              name_de: 'Gelöschtes Produkt',
+              name_ru: 'Удаленный товар',
+              price_eu: item.actualPurchasePriceInEu || 0,
+              actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
+              delivery_price_de: 0,
+              delivery_price_inEu: 0,
+              delivery_price_outEu: 0,
+              file: { url: '/uploads/deleted-product.png' },
+            };
+          }
+
+          return {
+            ...item,
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: good.price_eu,
+            actualPurchasePriceInEu: item.actualPurchasePriceInEu || good.price_eu,
+            delivery_price_de: good.delivery_price_de,
+            delivery_price_inEu: good.delivery_price_inEu,
+            delivery_price_outEu: good.delivery_price_outEu,
+            file: good.file,
+          };
+        });
+
+      // Рассчитываем общую стоимость заказа
+      const totalAmount = goodsWithDetails.reduce((sum, item) => {
+        const itemPrice = Number(item.actualPurchasePriceInEu) || 0;
+        const deliveryPrice =
+          Number(item[`delivery_price_${order.regionDelivery}`]) || 0;
+        const quantity = Number(item.qty) || 0;
+
+        return sum + (itemPrice + deliveryPrice) * quantity;
+      }, 0);
+
+      const qtyItemsInOrder = goodsWithDetails.length;
+
+      // Форматируем дату
+      const formattedDate = new Date(order.createdAt).toLocaleDateString(
+        'en-GB',
+        {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }
+      );
+
+      return {
+        ...order,
+        goods: goodsWithDetails,
+        totalAmount: totalAmount,
+        qtyItemsInOrder: qtyItemsInOrder,
+        formattedDate: formattedDate,
+      };
+    });
+
+    const qtyOrders = orders.length;
+    const grandTotal = ordersWithDetails.reduce(
+      (sum, order) => sum + order.totalAmount,
+      0
+    );
+
+    res.json({
+      orders: ordersWithDetails,
+      qtyOrders,
+      grandTotal,
+    });
+  } catch (error) {
+    console.error('[Error] Full error:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
 // получить все заказы - admin
 app.get('/api/admin_get_orders', async (req, res) => {
   try {
@@ -2292,6 +2415,241 @@ app.get('/api/get_sale_info', async (req, res) => {
     });
   }
 });
+
+
+// получить список админов
+app.get('/api/admin_get_admins', async (req, res) => {
+  try {
+    const admins = await AdminsListModel.find().sort({ createdAt: -1 });
+    res.json(admins);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+// сохранить нового админа
+app.post('/api/admin_add_admin', async (req, res) => {
+  try {
+    const { tlgid, name } = req.body;
+    
+    // Проверка обязательных полей
+    if (!tlgid || !name) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid and name are required'
+      });
+    }
+    
+    // Проверка на существование админа с таким tlgid
+    const existingAdmin = await AdminsListModel.findOne({ tlgid });
+    if (existingAdmin) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Admin with this tlgid already exists'
+      });
+    }
+    
+    const admin = new AdminsListModel({
+      tlgid: Number(tlgid),
+      name: name.trim(),
+    });
+
+    await admin.save();
+    
+    res.json({
+      status: 'ok',
+      admin: admin
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      status: 'error',
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+// обновить админа
+app.post('/api/admin_update_admin', async (req, res) => {
+  try {
+    const { id, tlgid, name } = req.body;
+    
+    // Проверка обязательных полей
+    if (!id || !tlgid || !name) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'id, tlgid and name are required'
+      });
+    }
+    
+    // Проверка на существование другого админа с таким tlgid
+    const existingAdmin = await AdminsListModel.findOne({ tlgid, _id: { $ne: id } });
+    if (existingAdmin) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'Admin with this tlgid already exists'
+      });
+    }
+    
+    const updatedAdmin = await AdminsListModel.findByIdAndUpdate(
+      id,
+      {
+        tlgid: Number(tlgid),
+        name: name.trim(),
+      },
+      { new: true }
+    );
+    
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'Admin not found'
+      });
+    }
+    
+    res.json({
+      status: 'ok',
+      admin: updatedAdmin
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      status: 'error',
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+// удалить админа
+app.post('/api/admin_delete_admin', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'id is required'
+      });
+    }
+    
+    const deletedAdmin = await AdminsListModel.findByIdAndDelete(id);
+    
+    if (!deletedAdmin) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'Admin not found'
+      });
+    }
+    
+    res.json({
+      status: 'ok',
+      deletedAdmin: deletedAdmin
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      status: 'error',
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+// отправить сообщение всем админам (для тестирования)
+app.post('/api/admin_send_message_to_all', async (req, res) => {
+  try {
+    const { message } = req.body;
+    
+    if (!message || !message.trim()) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'message is required'
+      });
+    }
+    
+    const result = await sendTlgMessageToAdmins(message.trim());
+    
+    res.json({
+      status: 'ok',
+      result: result
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      status: 'error',
+      message: 'ошибка сервера',
+      error: err.message
+    });
+  }
+});
+
+
+
+export async function sendTlgMessageToAdmins(messageText = 'New order is payed') {
+  try {
+    console.log('Начинаем отправку сообщения всем админам...');
+    
+    // Получаем всех администраторов из БД
+    const admins = await AdminsListModel.find();
+    console.log(`Найдено админов: ${admins.length}`);
+    
+    if (admins.length === 0) {
+      console.log('Нет админов в базе данных');
+      return { status: 'no_admins' };
+    }
+    
+    const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
+    const successfulSends = [];
+    const failedSends = [];
+    
+    // Отправляем сообщение каждому админу
+    for (const admin of admins) {
+      try {
+        const params = `?chat_id=${admin.tlgid}&text=${encodeURIComponent(messageText)}`;
+        const url = baseurl + params;
+        
+        // console.log(`Отправляем сообщение админу ${admin.name} (${admin.tlgid})`);
+        
+        const response = await axios.get(url);
+        
+        if (response.data.ok) {
+          // console.log(`✅ Сообщение успешно отправлено админу ${admin.name}`);
+          successfulSends.push({ admin: admin.name, tlgid: admin.tlgid });
+        } else {
+          throw new Error(`Telegram API вернул API error: ${response.data.description || 'Unknown error'}`);
+        }
+        
+      } catch (adminError) {
+        // console.error(`❌ Ошибка при отправке админу ${admin.name} (${admin.tlgid}):`, adminError.message);
+        failedSends.push({ admin: admin.name, tlgid: admin.tlgid, error: adminError.message });
+      }
+      
+      // Небольшая задержка между отправками, чтобы не превысить rate limit
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.log(`Результат отправки сообщений админам об оплаченном заказе: успешно - ${successfulSends.length}, ошибок - ${failedSends.length}`);
+    
+    return { 
+      status: 'ok',
+      totalAdmins: admins.length,
+      successful: successfulSends.length,
+      failed: failedSends.length,
+      successfulSends,
+      failedSends
+    };
+    
+  } catch (err) {
+    console.error('Ошибка в функции sendTlgMessageToAdmins:', err.message);
+    console.error('Полная информация об ошибке:', err.response?.data);
+    return { status: 'error', error: err.message };
+  }
+}
+
+
+
 
 /////////////////////
 
