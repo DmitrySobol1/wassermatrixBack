@@ -540,6 +540,36 @@ app.post('/api/admin_update_tag', async (req, res) => {
   }
 });
 
+// проверить, используется ли тег пользователями
+app.post('/api/admin_check_tag_usage', async (req, res) => {
+  try {
+    const { tagId } = req.body;
+    
+    if (!tagId) {
+      return res.status(400).json({
+        error: 'Tag ID is required',
+      });
+    }
+
+    console.log('[Database] Checking tag usage for ID:', tagId);
+    
+    // Ищем пользователей с этим тегом
+    const usersWithTag = await UserModel.find({ tags: tagId });
+    
+    res.json({
+      status: 'ok',
+      isUsed: usersWithTag.length > 0,
+      usersCount: usersWithTag.length
+    });
+  } catch (error) {
+    console.error('[Error] Failed to check tag usage:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
 // удалить тег
 app.post('/api/admin_delete_tag', async (req, res) => {
   try {
