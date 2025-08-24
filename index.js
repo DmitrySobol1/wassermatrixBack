@@ -1612,14 +1612,18 @@ app.get('/api/admin_get_countries', async (req, res) => {
 // создать новую страну для доставки
 app.post('/api/admin_add_new_country', async (req, res) => {
   try {
+
+
     const document = new CountriesForDeliveryModel({
       name_de: req.body.array.name_de,
       name_en: req.body.array.name_en,
       name_ru: req.body.array.name_ru,
       isEU: req.body.array.isEU,
     });
+   
 
     await document.save();
+
 
     res.status(201).json({ status: 'ok' });
   } catch (error) {
@@ -1666,6 +1670,43 @@ app.post('/api/admin_update_country', async (req, res) => {
     res.status(500).json({
       status: 'server error',
       message: error.message,
+    });
+  }
+});
+
+// удалить страну для доставки
+app.post('/api/admin_delete_country', async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Country ID is required' 
+      });
+    }
+
+    const result = await CountriesForDeliveryModel.findByIdAndDelete(id);
+
+    if (!result) {
+      console.warn(`Country with id ${id} not found`);
+      return res.status(404).json({ 
+        status: 'error', 
+        message: 'Country not found' 
+      });
+    }
+
+    res.status(200).json({ 
+      status: 'ok', 
+      message: 'Country deleted successfully',
+      data: result 
+    });
+  } catch (error) {
+    console.error('[Error] Deleting country:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while deleting country',
     });
   }
 });
