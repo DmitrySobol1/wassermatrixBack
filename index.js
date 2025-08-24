@@ -2764,6 +2764,73 @@ app.post('/api/user_sendTlgMessage', async (req, res) => {
 });
 
 
+// Проверка использования фильтра в товарах
+app.post('/api/admin_check_filter_usage', async (req, res) => {
+  try {
+    const { filterId } = req.body;
+    
+    if (!filterId) {
+      return res.status(400).json({
+        error: 'Filter ID is required',
+      });
+    }
+
+    console.log('[Database] Checking filter usage for ID:', filterId);
+    
+    // Ищем товары с этим типом (фильтром)
+    const goodsWithFilter = await GoodsModel.find({ type: filterId });
+    
+    res.json({
+      status: 'ok',
+      isUsed: goodsWithFilter.length > 0,
+      goodsCount: goodsWithFilter.length
+    });
+  } catch (error) {
+    console.error('[Error] Failed to check filter usage:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Удаление фильтра
+app.post('/api/admin_delete_filter', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        error: 'Filter ID is required',
+      });
+    }
+
+    console.log('[Database] Deleting filter with ID:', id);
+    
+    const result = await GoodsTypesModel.findByIdAndDelete(id);
+    
+    if (!result) {
+      return res.status(404).json({
+        error: 'Filter not found',
+      });
+    }
+
+    console.log('[Database] Filter deleted successfully:', result.name_en);
+    
+    res.json({
+      status: 'ok',
+      message: 'Filter deleted successfully',
+      deletedFilter: result
+    });
+  } catch (error) {
+    console.error('[Error] Failed to delete filter:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
 /////////////////////
 
 app.listen(PORT, (err) => {
