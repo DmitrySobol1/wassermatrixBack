@@ -12,6 +12,7 @@ import ReceiptsModel from './models/receipts.js';
 import SaleModel from './models/sale.js';
 import TagsModel from './models/tags.js';
 import AdminsListModel from './models/adminsList.js';
+import AdminPasswordModel from './models/adminPassword.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -2868,6 +2869,81 @@ app.post('/api/admin_delete_filter', async (req, res) => {
     res.status(500).json({
       error: 'Server error',
       details: error.message,
+    });
+  }
+});
+
+
+// создать пароль для входа админа
+app.post('/api/create_passw', async (req, res) => {
+  try {
+    
+    const { login, password } = req.body
+
+    const doc = new AdminPasswordModel({
+      login: login,
+      password: password,
+     
+    });
+    await doc.save();
+    
+    if (doc){
+      return res.json({ status:'created' });
+
+    }
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+// вход админа по логину и паролю
+app.post('/api/admin_login', async (req, res) => {
+  try {
+    const { login, password } = req.body;
+
+    // Валидация входных данных
+    if (!login || !password) {
+      return res.status(400).json({
+        error: 'Login and password are required'
+      });
+    }
+
+    console.log('[Auth] Admin login attempt for:', login);
+
+    // Поиск администратора по логину
+    const admin = await AdminPasswordModel.findOne({ login: login.trim() });
+
+    if (!admin) {
+      console.log('[Auth] Admin not found:', login);
+      return res.status(401).json({
+        error: 'Invalid login or password'
+      });
+    }
+
+    // Сравнение пароля
+    if (admin.password !== password.trim()) {
+      console.log('[Auth] Invalid password for admin:', login);
+      return res.status(401).json({
+        error: 'Invalid login or password'
+      });
+    }
+
+    console.log('[Auth] Admin login successful:', login);
+    
+    res.json({
+      status: 'success',
+      message: 'Login successful'
+    });
+
+  } catch (err) {
+    console.error('[Error] Admin login error:', err);
+    res.status(500).json({
+      error: 'Server error',
+      details: err.message
     });
   }
 });
