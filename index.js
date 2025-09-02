@@ -13,6 +13,8 @@ import SaleModel from './models/sale.js';
 import TagsModel from './models/tags.js';
 import AdminsListModel from './models/adminsList.js';
 import AdminPasswordModel from './models/adminPassword.js';
+import PromocodesModel from './models/promocodes.js';
+import PromocodesPersonalModel from './models/promocodesPersonal.js';
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -417,6 +419,40 @@ app.get('/api/admin_get_tags', async (req, res) => {
     res.json(tags);
   } catch (error) {
     console.error('[Error] Failed to fetch tags:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Получить все промокоды - admin
+app.get('/api/admin_get_promocodes', async (req, res) => {
+  try {
+    const promocodes = await PromocodesModel.find({
+      isActive: true
+    }).sort({ createdAt: -1 });
+    console.log('[Database] Promocodes fetched:', promocodes.length);
+    res.json(promocodes);
+  } catch (error) {
+    console.error('[Error] Failed to fetch promocodes:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// получить список персональных промокодов
+app.get('/api/admin_get_personal_promocodes', async (req, res) => {
+  try {
+    const personalPromocodes = await PromocodesPersonalModel.find({
+      isActive: true
+    }).populate('tlgid', 'tlgid name').sort({ createdAt: -1 });
+    console.log('[Database] Personal promocodes fetched:', personalPromocodes.length);
+    res.json(personalPromocodes);
+  } catch (error) {
+    console.error('[Error] Failed to fetch personal promocodes:', error);
     res.status(500).json({
       error: 'Server error',
       details: error.message,
@@ -1708,6 +1744,435 @@ app.post('/api/admin_delete_country', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while deleting country',
+    });
+  }
+});
+
+// создать новый промокод
+app.post('/api/admin_add_new_promocode', async (req, res) => {
+  try {
+    const {
+      description_admin,
+      description_users_de,
+      description_users_en,
+      description_users_ru,
+      code,
+      sale,
+      expiryDate,
+      forFirstPurchase
+    } = req.body;
+
+    // Проверяем, что все обязательные поля заполнены
+    if (!description_admin || !description_users_de || !description_users_en || 
+        !description_users_ru || !code || sale === undefined || sale === null || !expiryDate) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'All fields are required'
+      });
+    }
+
+    // Проверяем, что промокод уникальный
+    const existingPromocode = await PromocodesModel.findOne({ code: code });
+    if (existingPromocode) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Promocode already exists'
+      });
+    }
+
+    const document = new PromocodesModel({
+      description_admin: description_admin,
+      description_users_de: description_users_de,
+      description_users_en: description_users_en,
+      description_users_ru: description_users_ru,
+      code: code,
+      saleInPercent: Number(sale),
+      type: 'general', // По умолчанию general
+      expiryDate: new Date(expiryDate),
+      isActive: true,
+      forFirstPurshase: forFirstPurchase || false
+    });
+
+    await document.save();
+
+    res.status(201).json({ 
+      status: 'ok',
+      message: 'Promocode created successfully',
+      data: document
+    });
+  } catch (error) {
+    console.error('[Error] Creating promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while creating promocode',
+      error: error.message
+    });
+  }
+});
+
+// найти пользователя по tlgid
+app.post('/api/admin_find_user_by_tlgid', async (req, res) => {
+  try {
+    const { tlgid } = req.body;
+
+    if (!tlgid) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Telegram ID is required'
+      });
+    }
+
+    // Ищем пользователя по tlgid
+    const user = await UserModel.findOne({ tlgid: tlgid });
+    
+    if (user) {
+      res.json({
+        status: 'ok',
+        found: true,
+        user: {
+          tlgid: user.tlgid,
+          name: user.name || 'N/A'
+        }
+      });
+    } else {
+      res.json({
+        status: 'ok',
+        found: false,
+        message: 'User with mentioned telegram id not found'
+      });
+    }
+  } catch (error) {
+    console.error('[Error] Finding user by tlgid:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while finding user',
+      error: error.message
+    });
+  }
+});
+
+// создать новый персональный промокод
+app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
+  try {
+    const {
+      description_admin,
+      description_users_de,
+      description_users_en,
+      description_users_ru,
+      code,
+      sale,
+      tlgid,
+      expiryDate,
+      forFirstPurchase
+    } = req.body;
+
+    // Проверяем, что все обязательные поля заполнены
+    if (!description_admin || !description_users_de || !description_users_en || 
+        !description_users_ru || !code || sale === undefined || sale === null || 
+        !tlgid || !expiryDate) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'All fields are required'
+      });
+    }
+
+    // Находим пользователя по tlgid чтобы получить его ObjectId
+    const user = await UserModel.findOne({ tlgid: tlgid });
+    if (!user) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'User not found with provided telegram id'
+      });
+    }
+
+    // Проверяем, что персональный промокод уникальный
+    const existingPromocode = await PromocodesPersonalModel.findOne({ code: code });
+    if (existingPromocode) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Personal promocode already exists'
+      });
+    }
+
+    // Также проверяем в обычных промокодах
+    const existingGeneralPromocode = await PromocodesModel.findOne({ code: code });
+    if (existingGeneralPromocode) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Promocode already exists in general promocodes'
+      });
+    }
+
+    const document = new PromocodesPersonalModel({
+      tlgid: user._id,  // Сохраняем ObjectId пользователя, а не строку tlgid
+      description_admin: description_admin,
+      description_users_de: description_users_de,
+      description_users_en: description_users_en,
+      description_users_ru: description_users_ru,
+      code: code,
+      saleInPercent: Number(sale),
+      type: 'personal', // Всегда personal
+      expiryDate: new Date(expiryDate),
+      isActive: true,
+      isUsed: false,
+      forFirstPurshase: forFirstPurchase || false
+    });
+
+    await document.save();
+
+    res.status(201).json({ 
+      status: 'ok',
+      message: 'Personal promocode created successfully',
+      data: document
+    });
+  } catch (error) {
+    console.error('[Error] Creating personal promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while creating personal promocode',
+      error: error.message
+    });
+  }
+});
+
+// обновить промокод
+app.post('/api/admin_update_promocode', async (req, res) => {
+  try {
+    const {
+      id,
+      code,
+      description_admin,
+      description_users_de,
+      description_users_en,
+      description_users_ru,
+      expiryDate,
+      forFirstPurchase
+    } = req.body;
+
+    // Проверяем, что все обязательные поля заполнены
+    if (!id || !code || !description_admin || !description_users_de || 
+        !description_users_en || !description_users_ru || !expiryDate) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'All fields are required'
+      });
+    }
+
+    // Проверяем, что промокод существует
+    const existingPromocode = await PromocodesModel.findById(id);
+    if (!existingPromocode) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Promocode not found'
+      });
+    }
+
+    // Если код изменился, проверяем уникальность
+    if (existingPromocode.code !== code) {
+      const codeExists = await PromocodesModel.findOne({ code: code, _id: { $ne: id } });
+      if (codeExists) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Promocode with this code already exists'
+        });
+      }
+    }
+
+    // Обновляем промокод
+    const updatedPromocode = await PromocodesModel.findByIdAndUpdate(
+      id,
+      {
+        code: code,
+        description_admin: description_admin,
+        description_users_de: description_users_de,
+        description_users_en: description_users_en,
+        description_users_ru: description_users_ru,
+        expiryDate: new Date(expiryDate),
+        forFirstPurshase: forFirstPurchase || false
+      },
+      { new: true }
+    );
+
+    res.json({
+      status: 'ok',
+      message: 'Promocode updated successfully',
+      promocode: updatedPromocode
+    });
+  } catch (error) {
+    console.error('[Error] Updating promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while updating promocode',
+      error: error.message
+    });
+  }
+});
+
+// деактивировать промокод (изменить isActive = false)
+app.post('/api/admin_deactivate_promocode', async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Promocode ID is required'
+      });
+    }
+
+    // Проверяем, что промокод существует
+    const existingPromocode = await PromocodesModel.findById(id);
+    if (!existingPromocode) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Promocode not found'
+      });
+    }
+
+    // Деактивируем промокод
+    const updatedPromocode = await PromocodesModel.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+
+    res.json({
+      status: 'ok',
+      message: 'Promocode deactivated successfully',
+      promocode: updatedPromocode
+    });
+    
+    console.log('[Backend] Promocode deactivated:', updatedPromocode);
+  } catch (error) {
+    console.error('[Error] Deactivating promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while deactivating promocode',
+      error: error.message
+    });
+  }
+});
+
+// обновить персональный промокод
+app.post('/api/admin_update_personal_promocode', async (req, res) => {
+  try {
+    const {
+      id,
+      code,
+      description_admin,
+      description_users_de,
+      description_users_en,
+      description_users_ru,
+      expiryDate,
+      forFirstPurchase
+    } = req.body;
+
+    // Проверяем, что все обязательные поля заполнены
+    if (!id || !code || !description_admin || !description_users_de || 
+        !description_users_en || !description_users_ru || !expiryDate) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'All fields are required'
+      });
+    }
+
+    // Проверяем, что персональный промокод существует
+    const existingPromocode = await PromocodesPersonalModel.findById(id);
+    if (!existingPromocode) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Personal promocode not found'
+      });
+    }
+
+    // Если код изменился, проверяем уникальность
+    if (existingPromocode.code !== code) {
+      const codeExists = await PromocodesPersonalModel.findOne({ code: code, _id: { $ne: id } });
+      if (codeExists) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Personal promocode with this code already exists'
+        });
+      }
+    }
+
+    // Обновляем персональный промокод
+    const updatedPromocode = await PromocodesPersonalModel.findByIdAndUpdate(
+      id,
+      {
+        code: code,
+        description_admin: description_admin,
+        description_users_de: description_users_de,
+        description_users_en: description_users_en,
+        description_users_ru: description_users_ru,
+        expiryDate: new Date(expiryDate),
+        forFirstPurshase: forFirstPurchase || false
+      },
+      { new: true }
+    ).populate('tlgid', 'tlgid name');
+
+    res.json({
+      status: 'ok',
+      message: 'Personal promocode updated successfully',
+      promocode: updatedPromocode
+    });
+  } catch (error) {
+    console.error('[Error] Updating personal promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while updating personal promocode',
+      error: error.message
+    });
+  }
+});
+
+// деактивировать персональный промокод
+app.post('/api/admin_deactivate_personal_promocode', async (req, res) => {
+  try {
+    const { id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Personal promocode ID is required'
+      });
+    }
+
+    // Проверяем, что персональный промокод существует
+    const existingPromocode = await PromocodesPersonalModel.findById(id);
+    if (!existingPromocode) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Personal promocode not found'
+      });
+    }
+
+    // Деактивируем промокод
+    const updatedPromocode = await PromocodesPersonalModel.findByIdAndUpdate(
+      id,
+      { isActive: false },
+      { new: true }
+    );
+
+    res.json({
+      status: 'ok',
+      message: 'Personal promocode deactivated successfully',
+      promocode: updatedPromocode
+    });
+    
+    console.log('[Backend] Personal promocode deactivated:', updatedPromocode);
+  } catch (error) {
+    console.error('[Error] Deactivating personal promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while deactivating personal promocode',
+      error: error.message
     });
   }
 });
