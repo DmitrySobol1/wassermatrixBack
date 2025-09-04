@@ -2057,6 +2057,320 @@ app.post('/api/admin_deactivate_promocode', async (req, res) => {
   }
 });
 
+// проверить промокод пользователем
+app.post('/api/check_promocode', async (req, res) => {
+  try {
+    const { code: rawCode, userId } = req.body;
+
+    if (!rawCode && !userId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Promocode and user is required'
+      });
+    }
+
+    // Нормализуем код
+    const code = rawCode.trim().toLowerCase();
+
+    const promocode = await PromocodesModel.findOne({ code: code });
+    const promocodePersonal = await PromocodesPersonalModel.findOne({ code: code });
+    
+    
+    if (!promocode && !promocodePersonal) {
+      return res.status(404).json({
+        status: 'error',
+        message: `Промокод ${code} не действителен`
+      });
+    }
+
+    const user = await UserModel.findOne({ tlgid: userId });
+    const userValute = user.valute;
+
+    const currentDate = new Date();
+  
+    if(promocode) {
+    // Проверяем активность промокода
+    if (!promocode.isActive ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Промокод не активен'
+      });
+    }
+
+     // Проверяем срок действия
+    const expiryDate = new Date(promocode.expiryDate);
+
+     if (currentDate > expiryDate ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'срок действия истек'
+      });
+    }
+    
+  
+    // Если передан userId, проверяем не использовал ли уже пользователь этот промокод
+      if (user && promocode.tlgid.includes(user._id)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Вы уже использовали этот промокод'
+        });
+      }
+
+      // Для промокодов только для первой покупки - проверяем есть ли у пользователя заказы
+      if (promocode.forFirstPurshase && user) {
+        const userOrders = await OrdersModel.find({ tlgid: userId, payStatus: true });
+        if (userOrders.length > 0) {
+          return res.status(400).json({
+            status: 'error',
+            message: 'этот промокод применим только к 1ой покупке'
+          });
+        } 
+      }
+    
+
+
+    const cart = await CartsModel.findOne({ tlgid: userId }).lean();
+    
+    
+    const exchangeRates = await currencyConverter();
+
+    const goodsWithDetails = await Promise.all(
+      cart.goods.map(async (item) => {
+        try {
+          const good = await GoodsModel.findById(item.itemId);
+          if (!good) {
+            console.warn(`Товар с ID ${item.itemId} не найден`);
+            return null;
+          }
+          const itemPrice = Number(good.priceToShow_eu);
+          const convertedPrice = Number(
+            itemPrice * exchangeRates[userValute]
+          ).toFixed(2);
+          const itemQty = Number(item.qty);
+
+          const deliveryPriceDe = Number(good.delivery_price_de);
+          const deliveryPriceInEu = Number(good.delivery_price_inEu);
+          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+
+          const deliveryPriceToShow_de = Number(
+            deliveryPriceDe * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_inEu = Number(
+            deliveryPriceInEu * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_outEu = Number(
+            deliveryPriceOutEu * exchangeRates[userValute]
+          ).toFixed(2);
+
+
+          return {
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: (itemPrice* (1 - Number(promocode.saleInPercent) / 100)).toFixed(2),
+            price_euNoPromoApplied: itemPrice,
+            priceToShow: (Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100)).toFixed(2),
+            priceToShowNoPromoApplied: convertedPrice,
+            deliveryPriceToShow_de: deliveryPriceToShow_de,
+            deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
+            deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+            deliveryPriceEU_de: deliveryPriceDe,
+            deliveryPriceEU_inEu: deliveryPriceInEu,
+            deliveryPriceEU_outEu: deliveryPriceOutEu,
+            qty: itemQty,
+            itemId: item.itemId,
+            img: good.file?.url || null,
+            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
+            totalpriceItemWithPromo: ((Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100))*itemQty).toFixed(2),
+            valuteToShow: userValute,
+            isSaleNow: good.isSaleNow,
+            isWithPromoSale: true,
+            
+          };
+        } catch (error) {
+          console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
+          return null;
+        }
+      })
+    );
+
+           // Фильтруем null значения (если какие-то товары не найдены)
+    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
+
+    // Рассчитываем общее количество товаров и общую сумму
+    const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
+    const totalPrice = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItem),
+      0
+    );
+    const totalPriceWithPromo = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItemWithPromo),
+      0
+    );
+
+    return res.json({
+      status: 'ok',
+      goods: filteredGoods,
+      totalQty: totalQty,
+      valuteToShow: userValute,
+      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
+      totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
+      textForUser: 'промокод применен'
+    });
+
+    }
+
+    if (promocodePersonal){
+
+
+      // Проверка, что это код данного юзера
+      if (!promocodePersonal.tlgid.equals(user._id)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'Не твой'
+        });
+      }
+
+      if (!promocodePersonal.isUsed || !promocodePersonal.isActive ) {
+     return res.status(400).json({
+       status: 'error',
+       message: 'не действителен'
+     });
+   }
+
+       // Проверяем срок действия
+    const expiryDate = new Date(promocodePersonal.expiryDate);
+
+     if (currentDate > expiryDate ) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'срок действия истек'
+      });
+    }
+    
+
+    // Для промокодов только для первой покупки - проверяем есть ли у пользователя заказы
+      if (promocodePersonal.forFirstPurshase) {
+        const userOrders = await OrdersModel.find({ tlgid: userId, payStatus: true });
+        if (userOrders.length > 0) {
+          return res.status(400).json({
+            status: 'error',
+            message: 'этот промокод применим только к 1ой покупке'
+          });
+        } 
+      }
+
+
+    
+    
+
+    const cart = await CartsModel.findOne({ tlgid: userId }).lean();
+    
+    const exchangeRates = await currencyConverter();
+
+    const goodsWithDetails = await Promise.all(
+      cart.goods.map(async (item) => {
+        try {
+          const good = await GoodsModel.findById(item.itemId);
+          if (!good) {
+            console.warn(`Товар с ID ${item.itemId} не найден`);
+            return null;
+          }
+          const itemPrice = Number(good.priceToShow_eu);
+          const convertedPrice = Number(
+            itemPrice * exchangeRates[userValute]
+          ).toFixed(2);
+          const itemQty = Number(item.qty);
+
+          const deliveryPriceDe = Number(good.delivery_price_de);
+          const deliveryPriceInEu = Number(good.delivery_price_inEu);
+          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+
+          const deliveryPriceToShow_de = Number(
+            deliveryPriceDe * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_inEu = Number(
+            deliveryPriceInEu * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_outEu = Number(
+            deliveryPriceOutEu * exchangeRates[userValute]
+          ).toFixed(2);
+
+
+          return {
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: (itemPrice* (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2),
+            price_euNoPromoApplied: itemPrice,
+            priceToShow: (Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2),
+            priceToShowNoPromoApplied: convertedPrice,
+            deliveryPriceToShow_de: deliveryPriceToShow_de,
+            deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
+            deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+            deliveryPriceEU_de: deliveryPriceDe,
+            deliveryPriceEU_inEu: deliveryPriceInEu,
+            deliveryPriceEU_outEu: deliveryPriceOutEu,
+            qty: itemQty,
+            itemId: item.itemId,
+            img: good.file?.url || null,
+            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
+            totalpriceItemWithPromo: ((Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100))*itemQty).toFixed(2),
+            valuteToShow: userValute,
+            isSaleNow: good.isSaleNow,
+            isWithPromoSale: true,
+            
+          };
+        } catch (error) {
+          console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
+          return null;
+        }
+      })
+    );
+
+           // Фильтруем null значения (если какие-то товары не найдены)
+    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
+
+    // Рассчитываем общее количество товаров и общую сумму
+    const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
+    const totalPrice = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItem),
+      0
+    );
+    const totalPriceWithPromo = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItemWithPromo),
+      0
+    );
+
+     console.log('применили')
+
+    return res.json({
+      status: 'ok',
+      goods: filteredGoods,
+      totalQty: totalQty,
+      valuteToShow: userValute,
+      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
+      totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
+      textForUser: 'промокод применен!'
+    });
+
+   
+
+    }
+
+   
+
+  } catch (error) {
+    console.error('[Error] Checking promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while checking promocode',
+      error: error.message
+    });
+  }
+});
+
 // обновить персональный промокод
 app.post('/api/admin_update_personal_promocode', async (req, res) => {
   try {
