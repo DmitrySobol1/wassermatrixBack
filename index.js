@@ -113,6 +113,42 @@ app.post(
                 }
               }
             }
+
+            // Отмечаем промокод как использованный, если он был применен
+            if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
+              for (const item of updatedOrder.goods) {
+                try {
+                  // Проверяем, был ли использован промокод для этого товара
+                  if (item.isPurchasedByPromocode === true && item.promocode && item.promocodeType) {
+                    if (item.promocodeType === 'personal') {
+                      // Для персональных промокодов - отмечаем как использованный и деактивируем
+                      await PromocodesPersonalModel.findOneAndUpdate(
+                        { code: item.promocode },
+                        { 
+                          isUsed: true,
+                          isActive: false
+                        }
+                      );
+                      console.log(`Personal promocode ${item.promocode} marked as used`);
+                    } else if (item.promocodeType === 'general') {
+                      // Для общих промокодов - добавляем пользователя в массив tlgid
+                      const user = await UserModel.findOne({ tlgid: updatedOrder.tlgid });
+                      if (user) {
+                        await PromocodesModel.findOneAndUpdate(
+                          { code: item.promocode },
+                          { $addToSet: { tlgid: user._id } }
+                        );
+                        console.log(`User ${updatedOrder.tlgid} added to general promocode ${item.promocode} usage list`);
+                      }
+                    }
+                    // Прерываем цикл после первого найденного промокода
+                    break;
+                  }
+                } catch (promocodeError) {
+                  console.error(`Error updating promocode for item ${item.itemId}:`, promocodeError);
+                }
+              }
+            }
           } else {
             console.log(`Order with session ID ${session.id} not found`);
           }
@@ -2142,6 +2178,7 @@ app.post('/api/check_promocode', async (req, res) => {
             console.warn(`Товар с ID ${item.itemId} не найден`);
             return null;
           }
+
           const itemPrice = Number(good.priceToShow_eu);
           const convertedPrice = Number(
             itemPrice * exchangeRates[userValute]
@@ -2162,14 +2199,33 @@ app.post('/api/check_promocode', async (req, res) => {
             deliveryPriceOutEu * exchangeRates[userValute]
           ).toFixed(2);
 
+          // если товар продается без скидки
+          let price_eu_toReturn = (itemPrice* (1 - Number(promocode.saleInPercent) / 100)).toFixed(2)
+          let priceToShow_toReturn = (Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100)).toFixed(2)
+          let isWithPromoSale_toReturn = true
+          let totalpriceItemWithPromo_toReturn = ((Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100))*itemQty).toFixed(2)
+          let promocodeText_toReturn = code
+          let promocodeType_toReturn = 'general'
+
+
+          // если товар продается уже по скидке
+          if (good.isSaleNow){
+            price_eu_toReturn = itemPrice.toFixed(2)
+            priceToShow_toReturn = convertedPrice
+            isWithPromoSale_toReturn = false
+            totalpriceItemWithPromo_toReturn = (convertedPrice * itemQty).toFixed(2)
+            promocodeText_toReturn = 'no'
+            promocodeType_toReturn = 'no'
+          }
+
 
           return {
             name_en: good.name_en,
             name_de: good.name_de,
             name_ru: good.name_ru,
-            price_eu: (itemPrice* (1 - Number(promocode.saleInPercent) / 100)).toFixed(2),
+            price_eu: price_eu_toReturn,
             price_euNoPromoApplied: itemPrice,
-            priceToShow: (Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100)).toFixed(2),
+            priceToShow: priceToShow_toReturn,
             priceToShowNoPromoApplied: convertedPrice,
             deliveryPriceToShow_de: deliveryPriceToShow_de,
             deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
@@ -2181,10 +2237,12 @@ app.post('/api/check_promocode', async (req, res) => {
             itemId: item.itemId,
             img: good.file?.url || null,
             totalpriceItem: (convertedPrice * itemQty).toFixed(2),
-            totalpriceItemWithPromo: ((Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100))*itemQty).toFixed(2),
+            totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
             valuteToShow: userValute,
             isSaleNow: good.isSaleNow,
-            isWithPromoSale: true,
+            isWithPromoSale: isWithPromoSale_toReturn,
+            promocodeText: promocodeText_toReturn, 
+            promocodeType: promocodeType_toReturn
             
           };
         } catch (error) {
@@ -2297,13 +2355,32 @@ app.post('/api/check_promocode', async (req, res) => {
           ).toFixed(2);
 
 
+           // если товар продается без скидки
+          let price_eu_toReturn = (itemPrice* (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2)
+          let priceToShow_toReturn = (Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2)
+          let isWithPromoSale_toReturn = true
+          let totalpriceItemWithPromo_toReturn = ((Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100))*itemQty).toFixed(2)
+          let promocodeText_toReturn = code
+          let promocodeType_toReturn = 'personal'
+
+          // если товар продается уже по скидке
+          if (good.isSaleNow){
+            price_eu_toReturn = itemPrice.toFixed(2)
+            priceToShow_toReturn = convertedPrice
+            isWithPromoSale_toReturn = false
+            totalpriceItemWithPromo_toReturn = (convertedPrice * itemQty).toFixed(2)
+            promocodeText_toReturn = 'no'
+            promocodeType_toReturn = 'no'
+          }
+
+
           return {
             name_en: good.name_en,
             name_de: good.name_de,
             name_ru: good.name_ru,
-            price_eu: (itemPrice* (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2),
+            price_eu: price_eu_toReturn,
             price_euNoPromoApplied: itemPrice,
-            priceToShow: (Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2),
+            priceToShow: priceToShow_toReturn,
             priceToShowNoPromoApplied: convertedPrice,
             deliveryPriceToShow_de: deliveryPriceToShow_de,
             deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
@@ -2315,10 +2392,12 @@ app.post('/api/check_promocode', async (req, res) => {
             itemId: item.itemId,
             img: good.file?.url || null,
             totalpriceItem: (convertedPrice * itemQty).toFixed(2),
-            totalpriceItemWithPromo: ((Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100))*itemQty).toFixed(2),
+            totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
             valuteToShow: userValute,
             isSaleNow: good.isSaleNow,
-            isWithPromoSale: true,
+            isWithPromoSale: isWithPromoSale_toReturn,
+            promocodeText: promocodeText_toReturn, 
+            promocodeType: promocodeType_toReturn
             
           };
         } catch (error) {
@@ -2922,6 +3001,10 @@ app.post('/api/create_payment_session', async (req, res) => {
       });
     }
 
+
+    // console.log('CAAART FOR CHECKING', cart)
+    // return
+
     // Создаем line items для Stripe из товаров корзины
     const lineItems = cart.map((item) => {
       const itemPrice = Number(item.price_eu);
@@ -2983,7 +3066,10 @@ app.post('/api/create_payment_session', async (req, res) => {
         itemId: item.itemId,
         qty: item.qty,
         actualPurchasePriceInEu: item.price_eu,
-        isPurchasedBySale: item.isSaleNow
+        isPurchasedBySale: item.isSaleNow,
+        isPurchasedByPromocode: item.isWithPromoSale,
+        promocode: item.promocodeText,
+        promocodeType: item.promocodeType
       })),
       country: deliveryInfo.selectedCountry.name_en,
       regionDelivery: region,
@@ -3652,6 +3738,46 @@ app.post('/api/admin_delete_filter', async (req, res) => {
   }
 });
 
+// получить персональные промокоды пользователя
+app.get('/api/user_get_personal_promocodes', async (req, res) => {
+  try {
+    const { tlgid } = req.query;
+
+    if (!tlgid) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'tlgid is required'
+      });
+    }
+
+    // Находим пользователя по tlgid
+    const user = await UserModel.findOne({ tlgid: Number(tlgid) });
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found'
+      });
+    }
+
+    // Получаем персональные промокоды пользователя
+    const personalPromocodes = await PromocodesPersonalModel.find({ 
+      tlgid: user._id,
+      isActive: true 
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      status: 'ok',
+      promocodes: personalPromocodes
+    });
+  } catch (error) {
+    console.error('[Error] Getting user personal promocodes:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while getting personal promocodes',
+      error: error.message
+    });
+  }
+});
 
 // создать пароль для входа админа
 app.post('/api/create_passw', async (req, res) => {

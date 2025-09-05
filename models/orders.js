@@ -27,6 +27,15 @@ const OrdersSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
+
+        isPurchasedByPromocode: {
+          type: Boolean,
+          default: false,
+        },
+        promocode: String,
+        promocodeType: String,
+
+
       },
     ],
     country: String,
