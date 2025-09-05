@@ -465,10 +465,20 @@ app.get('/api/admin_get_tags', async (req, res) => {
 // Получить все промокоды - admin
 app.get('/api/admin_get_promocodes', async (req, res) => {
   try {
-    const promocodes = await PromocodesModel.find({
-      isActive: true
-    }).sort({ createdAt: -1 });
-    console.log('[Database] Promocodes fetched:', promocodes.length);
+    const { isActive } = req.query;
+    let filter = {};
+    
+    if (isActive === 'true') {
+      filter.isActive = true;
+    } else if (isActive === 'false') {
+      filter.isActive = false;
+    } else {
+      // По умолчанию возвращаем только активные промокоды для обратной совместимости
+      filter.isActive = true;
+    }
+    
+    const promocodes = await PromocodesModel.find(filter).sort({ createdAt: -1 });
+    console.log('[Database] Promocodes fetched:', promocodes.length, 'with filter:', filter);
     res.json(promocodes);
   } catch (error) {
     console.error('[Error] Failed to fetch promocodes:', error);
@@ -482,10 +492,22 @@ app.get('/api/admin_get_promocodes', async (req, res) => {
 // получить список персональных промокодов
 app.get('/api/admin_get_personal_promocodes', async (req, res) => {
   try {
-    const personalPromocodes = await PromocodesPersonalModel.find({
-      isActive: true
-    }).populate('tlgid', 'tlgid name').sort({ createdAt: -1 });
-    console.log('[Database] Personal promocodes fetched:', personalPromocodes.length);
+    const { isActive } = req.query;
+    let filter = {};
+    
+    if (isActive === 'true') {
+      filter.isActive = true;
+    } else if (isActive === 'false') {
+      filter.isActive = false;
+    } else {
+      // По умолчанию возвращаем только активные промокоды для обратной совместимости
+      filter.isActive = true;
+    }
+    
+    const personalPromocodes = await PromocodesPersonalModel.find(filter)
+      .populate('tlgid', 'tlgid name')
+      .sort({ createdAt: -1 });
+    console.log('[Database] Personal promocodes fetched:', personalPromocodes.length, 'with filter:', filter);
     res.json(personalPromocodes);
   } catch (error) {
     console.error('[Error] Failed to fetch personal promocodes:', error);
@@ -2105,22 +2127,61 @@ app.post('/api/check_promocode', async (req, res) => {
       });
     }
 
-    // Нормализуем код
+    // нижний регистр
     const code = rawCode.trim().toLowerCase();
+    
+    const user = await UserModel.findOne({ tlgid: userId });
+    const userValute = user.valute;
+    const userLanguage = user.language
 
     const promocode = await PromocodesModel.findOne({ code: code });
     const promocodePersonal = await PromocodesPersonalModel.findOne({ code: code });
     
+    const isNotValid = {
+      de: 'der gutscheincode ist ungültig',
+      en: 'promocode is not valid',
+      ru: 'промокод не действителен'
+    }
+
+    const isNotActive = {
+      de: 'der gutscheincode ist nicht aktiv',
+      en: 'promocode is not active',
+      ru: 'промокод не активен'
+    }
+
+    const isExpired = {
+      de: 'der gutscheincode ist abgelaufen',
+      en: 'promocode has expired',
+      ru: 'срок действия истек'
+    }
+
+    const alreadyUsed = {
+      de: 'sie haben diesen gutscheincode bereits verwendet',
+      en: 'you have already used this promocode',
+      ru: 'вы уже использовали этот промокод'
+    }
+
+    const firstPurchaseOnly = {
+      de: 'dieser gutscheincode gilt nur für den ersten kauf',
+      en: 'this promocode is only for first purchase',
+      ru: 'этот промокод применим только к 1ой покупке'
+    }
+
+    const codeApplied = {
+      de: 'promo-Code angewendet',
+      en: 'promocode applied',
+      ru: 'промокод применен'
+     }
+
     
     if (!promocode && !promocodePersonal) {
       return res.status(404).json({
         status: 'error',
-        message: `Промокод ${code} не действителен`
+        // message: `Промокод ${code} не действителен`
+        message: `${code} - ${isNotValid[userLanguage]}`
       });
     }
 
-    const user = await UserModel.findOne({ tlgid: userId });
-    const userValute = user.valute;
 
     const currentDate = new Date();
   
@@ -2129,7 +2190,7 @@ app.post('/api/check_promocode', async (req, res) => {
     if (!promocode.isActive ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Промокод не активен'
+        message: isNotActive[userLanguage]
       });
     }
 
@@ -2139,7 +2200,7 @@ app.post('/api/check_promocode', async (req, res) => {
      if (currentDate > expiryDate ) {
       return res.status(400).json({
         status: 'error',
-        message: 'срок действия истек'
+        message: isExpired[userLanguage]
       });
     }
     
@@ -2148,7 +2209,7 @@ app.post('/api/check_promocode', async (req, res) => {
       if (user && promocode.tlgid.includes(user._id)) {
         return res.status(400).json({
           status: 'error',
-          message: 'Вы уже использовали этот промокод'
+          message: alreadyUsed[userLanguage]
         });
       }
 
@@ -2158,7 +2219,7 @@ app.post('/api/check_promocode', async (req, res) => {
         if (userOrders.length > 0) {
           return res.status(400).json({
             status: 'error',
-            message: 'этот промокод применим только к 1ой покупке'
+            message: firstPurchaseOnly[userLanguage]
           });
         } 
       }
@@ -2266,6 +2327,8 @@ app.post('/api/check_promocode', async (req, res) => {
       0
     );
 
+    
+
     return res.json({
       status: 'ok',
       goods: filteredGoods,
@@ -2273,7 +2336,7 @@ app.post('/api/check_promocode', async (req, res) => {
       valuteToShow: userValute,
       totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
       totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
-      textForUser: 'промокод применен'
+      textForUser: codeApplied[userLanguage]
     });
 
     }
@@ -2285,14 +2348,17 @@ app.post('/api/check_promocode', async (req, res) => {
       if (!promocodePersonal.tlgid.equals(user._id)) {
         return res.status(400).json({
           status: 'error',
-          message: 'Не твой'
+          message: `${code} - ${isNotValid[userLanguage]}`
         });
       }
+
+
+
 
       if (promocodePersonal.isUsed || !promocodePersonal.isActive ) {
      return res.status(400).json({
        status: 'error',
-       message: 'не действителен!!!'
+       message: isNotValid[userLanguage]
      });
    }
 
@@ -2302,7 +2368,7 @@ app.post('/api/check_promocode', async (req, res) => {
      if (currentDate > expiryDate ) {
       return res.status(400).json({
         status: 'error',
-        message: 'срок действия истек'
+        message: isExpired[userLanguage]
       });
     }
     
@@ -2313,7 +2379,7 @@ app.post('/api/check_promocode', async (req, res) => {
         if (userOrders.length > 0) {
           return res.status(400).json({
             status: 'error',
-            message: 'этот промокод применим только к 1ой покупке'
+            message: firstPurchaseOnly[userLanguage]
           });
         } 
       }
@@ -2423,6 +2489,8 @@ app.post('/api/check_promocode', async (req, res) => {
 
      console.log('применили')
 
+     
+
     return res.json({
       status: 'ok',
       goods: filteredGoods,
@@ -2430,7 +2498,7 @@ app.post('/api/check_promocode', async (req, res) => {
       valuteToShow: userValute,
       totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
       totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
-      textForUser: 'промокод применен!'
+      textForUser: codeApplied[userLanguage]
     });
 
    
