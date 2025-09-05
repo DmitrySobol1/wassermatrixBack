@@ -2289,10 +2289,10 @@ app.post('/api/check_promocode', async (req, res) => {
         });
       }
 
-      if (!promocodePersonal.isUsed || !promocodePersonal.isActive ) {
+      if (promocodePersonal.isUsed || !promocodePersonal.isActive ) {
      return res.status(400).json({
        status: 'error',
-       message: 'не действителен'
+       message: 'не действителен!!!'
      });
    }
 
@@ -3762,7 +3762,8 @@ app.get('/api/user_get_personal_promocodes', async (req, res) => {
     // Получаем персональные промокоды пользователя
     const personalPromocodes = await PromocodesPersonalModel.find({ 
       tlgid: user._id,
-      isActive: true 
+      isActive: true,
+      isUsed: false
     }).sort({ createdAt: -1 });
 
     res.json({
