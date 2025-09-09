@@ -32,6 +32,10 @@ const OrdersSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
+        isPurchasedByCashback: {
+          type: Boolean,
+          default: false, 
+        },
         promocode: String,
         promocodeType: String,
 
@@ -67,6 +71,19 @@ const OrdersSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    typeLoyaltySystem: String,
+    shouldBeCashbacked: {
+      type: Number,
+      default: 0
+    },
+    cashbackValute: {
+      type: String,
+      default: 'no'
+    },
+    isCashbackOperationDone: {
+      type: String,
+      default: 'no'
+    }
   },
   {
     timestamps: true, // Автоматические created_at и updated_at
@@ -74,3 +91,4 @@ const OrdersSchema = new mongoose.Schema(
 );
 
 export default mongoose.model('Orders', OrdersSchema);
+

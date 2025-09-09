@@ -15,6 +15,8 @@ import AdminsListModel from './models/adminsList.js';
 import AdminPasswordModel from './models/adminPassword.js';
 import PromocodesModel from './models/promocodes.js';
 import PromocodesPersonalModel from './models/promocodesPersonal.js';
+import CashbackBallModel from './models/cashbackball.js';
+
 
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
@@ -113,6 +115,34 @@ app.post(
                 }
               }
             }
+
+            // добавляем баллы кешбека пользователю
+            if (updatedOrder.typeLoyaltySystem == 'addCashback') {
+
+              const cashbackValute = updatedOrder.cashbackValute
+              const shouldBeCashbacked = updatedOrder.shouldBeCashbacked
+
+              console.log('добавление кешбека: ')
+              console.log('баллы:',shouldBeCashbacked, ' валюта юзера:',cashbackValute )
+
+              const exchangeRates = await currencyConverter();
+              const convertedCashback = shouldBeCashbacked / exchangeRates[cashbackValute]
+
+              console.log('конвертированные баллы:',convertedCashback, ' евро:' )
+              
+              const updatedUser = await UserModel.findOneAndUpdate(
+            { tlgid: updatedOrder.tlgid }, // условие поиска
+            {
+              $inc: { cashbackBall: convertedCashback }
+            },
+            { new: true } 
+          );
+
+            updatedOrder.isCashbackOperationDone = 'cashback-added' 
+            await updatedOrder.save();
+
+            }
+
 
             // Отмечаем промокод как использованный, если он был применен
             if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
@@ -800,6 +830,294 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
     });
   }
 });
+
+// ============= CASHBACK BALL ENDPOINTS =============
+
+// Получить все настройки cashback
+app.get('/api/admin_get_cashbackball', async (req, res) => {
+  try {
+    const cashbackSettings = await CashbackBallModel.find().sort({ position: 1 });
+    console.log('[Database] CashbackBall settings fetched:', cashbackSettings.length);
+    res.json(cashbackSettings);
+  } catch (error) {
+    console.error('[Error] Failed to fetch cashbackball settings:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Добавить новую настройку cashback
+app.post('/api/admin_add_cashbackball', async (req, res) => {
+  try {
+    const { sum, percent, name } = req.body;
+    
+    if (sum === undefined || sum === null || isNaN(sum) || sum < 0) {
+      return res.status(400).json({
+        error: 'Sum is required and must be a positive number or zero',
+      });
+    }
+
+    if (!percent || isNaN(percent) || percent <= 0 || percent > 100) {
+      return res.status(400).json({
+        error: 'Percent is required and must be between 1 and 100',
+      });
+    }
+
+    if (!name || name.trim() === '') {
+      return res.status(400).json({
+        error: 'Name is required',
+      });
+    }
+
+    // Получаем максимальную позицию и добавляем 1
+    const maxPositionDoc = await CashbackBallModel.findOne().sort({ position: -1 });
+    const nextPosition = maxPositionDoc ? maxPositionDoc.position + 1 : 1;
+
+    const newCashbackSetting = new CashbackBallModel({
+      sum: parseFloat(sum),
+      percent: parseFloat(percent),
+      name: name.trim(),
+      position: nextPosition
+    });
+
+    const savedSetting = await newCashbackSetting.save();
+    
+    console.log('[Database] CashbackBall setting created:', savedSetting._id);
+    
+    res.json({
+      status: 'ok',
+      cashbackSetting: savedSetting,
+    });
+  } catch (error) {
+    console.error('[Error] Failed to create cashbackball setting:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Обновить настройку cashback
+app.post('/api/admin_update_cashbackball', async (req, res) => {
+  try {
+    const { id, sum, percent } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        error: 'ID is required',
+      });
+    }
+
+    console.log('SUM', sum)
+
+    if (sum === undefined || sum === null || isNaN(sum) || sum < 0) {
+      return res.status(400).json({
+        error: 'Sum is required and must be a positive number or zero',
+      });
+    }
+
+    if (!percent || isNaN(percent) || percent < 0 || percent > 100) {
+      return res.status(400).json({
+        error: 'Percent is required and must be between 1 and 100',
+      });
+    }
+
+   
+
+    const updatedSetting = await CashbackBallModel.findByIdAndUpdate(
+      id,
+      {
+        sum: parseFloat(sum),
+        percent: parseFloat(percent),
+      },
+      { new: true }
+    );
+
+    if (!updatedSetting) {
+      return res.status(404).json({
+        error: 'CashbackBall setting not found',
+      });
+    }
+
+    console.log('[Database] CashbackBall setting updated:', updatedSetting._id);
+    
+    res.json({
+      status: 'ok',
+      cashbackSetting: updatedSetting,
+    });
+  } catch (error) {
+    console.error('[Error] Failed to update cashbackball setting:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Удалить настройку cashback
+app.post('/api/admin_delete_cashbackball', async (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({
+        error: 'ID is required',
+      });
+    }
+
+    const deletedSetting = await CashbackBallModel.findByIdAndDelete(id);
+
+    if (!deletedSetting) {
+      return res.status(404).json({
+        error: 'CashbackBall setting not found',
+      });
+    }
+
+    console.log('[Database] CashbackBall setting deleted:', deletedSetting._id);
+    
+    res.json({
+      status: 'ok',
+      deletedSetting: deletedSetting,
+    });
+  } catch (error) {
+    console.error('[Error] Failed to delete cashbackball setting:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Получить уровни кэшбека для пользователей
+app.get('/api/get_cashbackball_levels', async (req, res) => {
+  try {
+    const cashbackLevels = await CashbackBallModel.find().sort({ position: 1 });
+    console.log('[Database] CashbackBall levels fetched for users:', cashbackLevels.length);
+    res.json(cashbackLevels);
+  } catch (error) {
+    console.error('[Error] Failed to fetch cashbackball levels for users:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// Получить заказы пользователя с определенным статусом оплаты
+app.get('/api/user_get_orders', async (req, res) => {
+  try {
+    const { tlgid, payStatus } = req.query;
+
+    if (!tlgid) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'tlgid is required'
+      });
+    }
+    
+    const exchangeRates = await currencyConverter();
+
+    console.log('exchangeRates',exchangeRates)
+
+    const user = await UserModel.findOne({ tlgid });
+    const valute = user?.valute || 'eur';
+    const cashbackBall_inEu = user?.cashbackBall
+
+    const cashbackBall = Number(cashbackBall_inEu) * Number(exchangeRates[valute])
+
+    // Получаем заказы с оплатой
+    const orders = await OrdersModel.find({ tlgid, payStatus: true })
+      .populate('goods.itemId')
+      .lean();
+
+    const purchaseQty = orders.length;
+
+    // Считаем общую сумму покупок из поля actualPurchasePriceInEu
+    let totalSumInEur = 0;
+    orders.forEach((order) => {
+      if (order.goods && Array.isArray(order.goods)) {
+        order.goods.forEach((good) => {
+          if (good.actualPurchasePriceInEu) {
+            totalSumInEur += parseFloat(good.actualPurchasePriceInEu);
+          }
+        });
+      }
+    });
+
+    // Конвертируем в валюту клиента
+    const totalSumInUserCurrency = totalSumInEur * exchangeRates[valute];
+
+    // Получаем уровни кешбека
+    const cashbackLevels = await CashbackBallModel.find().lean();
+    
+    // Сортируем уровни по sum (по возрастанию)
+    const sortedLevels = cashbackLevels.sort((a, b) => a.sum - b.sum);
+    
+    // Создаем массив уровней в валюте клиента
+    const sortedLevelsUserCurrency = sortedLevels.map(level => ({
+      ...level,
+      sum: parseFloat((level.sum * exchangeRates[valute]).toFixed(2))
+    }));
+
+    // Определяем текущий уровень кешбека клиента
+    let currentLevel = '';
+    let currentPercent = 0;
+    let nextLevelSum = 0;
+    let deltaToNextLevel = 0;
+
+    for (let i = 0; i < sortedLevels.length; i++) {
+      if (totalSumInEur >= sortedLevels[i].sum) {
+        currentLevel = sortedLevels[i].position || sortedLevels[i].name;
+        currentPercent = sortedLevels[i].percent
+      } else {
+        // Нашли следующий уровень
+        nextLevelSum = sortedLevels[i].sum;
+        break;
+      }
+    }
+
+    // Если не достиг ни одного уровня
+    if (!currentLevel && sortedLevels.length > 0) {
+      currentLevel = 'No level';
+      currentPercent = 0;
+      nextLevelSum = sortedLevels[0].sum;
+    }
+
+    // Считаем сколько осталось до следующего уровня
+    if (nextLevelSum > 0) {
+      deltaToNextLevel = nextLevelSum - totalSumInEur;
+    } else {
+      deltaToNextLevel = 0; // Достиг максимального уровня
+    }
+
+    // Конвертируем deltaToNextLevel в валюту пользователя
+    const deltaToNextLevelInUserCurrency = deltaToNextLevel * exchangeRates[valute];
+
+    console.log(`[Database] Orders fetched for user ${tlgid}: ${purchaseQty} orders, total sum: ${totalSumInEur} EUR (${totalSumInUserCurrency.toFixed(2)} ${valute}), level: ${currentLevel}, next level in: ${deltaToNextLevel} EUR`);
+    
+    res.json({
+      cashbackBall,
+      purchaseQty,
+      totalSumInEur,
+      totalSumInUserCurrency: parseFloat(totalSumInUserCurrency.toFixed(2)),
+      valute,
+      currentPercent,
+      currentCashbackLevel: currentLevel,
+      deltaToNextLevelInUserCurrency: parseFloat(deltaToNextLevelInUserCurrency.toFixed(2)),
+      sortedLevelsUserCurrency: sortedLevelsUserCurrency
+    });
+  } catch (error) {
+    console.error('[Error] Failed to fetch user orders:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// ============= END CASHBACK BALL ENDPOINTS =============
 
 // получить всех пользователей
 app.get('/api/admin_get_users', async (req, res) => {
@@ -2501,11 +2819,7 @@ app.post('/api/check_promocode', async (req, res) => {
       textForUser: codeApplied[userLanguage]
     });
 
-   
-
     }
-
-   
 
   } catch (error) {
     console.error('[Error] Checking promocode:', error);
@@ -3060,12 +3374,13 @@ app.post('/api/admin_update_order_status', async (req, res) => {
 // создать Stripe Checkout Session для оплаты
 app.post('/api/create_payment_session', async (req, res) => {
   try {
-    const { cart, deliveryInfo, totalSum, region, tlgid } = req.body;
+    const { cart, deliveryInfo, totalSum, region, tlgid,typeLoyaltySystem, shouldBeCashbacked,cashbackValute  } = req.body;
 
-    if (!cart || !deliveryInfo || !totalSum || !tlgid) {
+
+    if (!cart || !deliveryInfo || !totalSum || !tlgid || !typeLoyaltySystem || !shouldBeCashbacked, !cashbackValute) {
       return res.status(400).json({
         status: 'error',
-        message: 'Cart, delivery info, total sum and tlgid are required',
+        message: 'Cart, delivery info, total sum, tlgid and typeLoyaltySystem are required',
       });
     }
 
@@ -3134,6 +3449,7 @@ app.post('/api/create_payment_session', async (req, res) => {
         itemId: item.itemId,
         qty: item.qty,
         actualPurchasePriceInEu: item.price_eu,
+        isPurchasedByCashback: item.isWithCashbackSale,
         isPurchasedBySale: item.isSaleNow,
         isPurchasedByPromocode: item.isWithPromoSale,
         promocode: item.promocodeText,
@@ -3147,6 +3463,10 @@ app.post('/api/create_payment_session', async (req, res) => {
       orderStatus: defaultStatus._id,
       payStatus: false, // Будет изменено на true через webhook
       stripeSessionId: session.id, // Сохраняем session ID для webhook
+      typeLoyaltySystem: typeLoyaltySystem,
+      shouldBeCashbacked: shouldBeCashbacked,
+      cashbackValute:cashbackValute
+      
     });
 
     await newOrder.save();
@@ -3298,6 +3618,41 @@ app.get('/api/user_get_profile', async (req, res) => {
     });
   } catch (error) {
     console.error('[Get User Profile Error]:', error);
+    res.status(500).json({
+      status: 'server error',
+      message: error.message,
+    });
+  }
+});
+
+// Получить cashback баллы пользователя
+app.get('/api/user_get_cashback', async (req, res) => {
+  try {
+    const { tlgid } = req.query;
+
+    if (!tlgid) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'tlgid is required',
+      });
+    }
+
+    // Ищем пользователя в базе данных
+    const user = await UserModel.findOne({ tlgid: Number(tlgid) }).lean();
+
+    if (!user) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'User not found',
+      });
+    }
+
+    res.json({
+      status: 'ok',
+      cashbackBall: user.cashbackBall || 0,
+    });
+  } catch (error) {
+    console.error('[Get User Cashback Error]:', error);
     res.status(500).json({
       status: 'server error',
       message: error.message,
@@ -3921,6 +4276,182 @@ app.post('/api/admin_login', async (req, res) => {
     });
   }
 });
+
+
+
+
+// списать баллы при покупке 
+app.post('/api/writeoff_cashback', async (req, res) => {
+  try {
+    const { cashbackValue, userId } = req.body;
+
+    if (!cashbackValue && !userId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Promocode and user is required'
+      });
+    }
+       
+    const user = await UserModel.findOne({ tlgid: userId });
+    const userValute = user.valute;
+    const userLanguage = user.language
+
+
+     const codeApplied = {
+      de: 'cashback-punkte wurden angewendet',
+      en: 'cashback points were applied',
+      ru: 'баллов списано'
+     }
+
+
+    const cart = await CartsModel.findOne({ tlgid: userId }).lean();
+    
+    const exchangeRates = await currencyConverter();
+
+    // Подсчитываем количество товаров с isSaleNow = false
+    let countItemsWithoutSale = 0;
+    
+    for (const item of cart.goods) {
+      const good = await
+    GoodsModel.findById(item.itemId);
+      if (good && good.isSaleNow === false) {
+        countItemsWithoutSale = countItemsWithoutSale + item.qty
+      }
+    }
+
+    const writeOffFromEachItem = Number((cashbackValue/countItemsWithoutSale).toFixed(2))
+    const writeOffFromEachItem_inEu = writeOffFromEachItem * exchangeRates[userValute]
+
+    console.log('countItemsWithoutSale',countItemsWithoutSale)
+    console.log('writeOffFromEachItem',writeOffFromEachItem)
+    
+    
+          
+    
+    
+    const goodsWithDetails = await Promise.all(
+      cart.goods.map(async (item) => {
+        try {
+          const good = await GoodsModel.findById(item.itemId);
+          if (!good) {
+            console.warn(`Товар с ID ${item.itemId} не найден`);
+            return null;
+          }
+
+          const itemPrice = Number(good.priceToShow_eu);
+          const convertedPrice = Number(
+            itemPrice * exchangeRates[userValute]
+          ).toFixed(2);
+          const itemQty = Number(item.qty);
+
+          const deliveryPriceDe = Number(good.delivery_price_de);
+          const deliveryPriceInEu = Number(good.delivery_price_inEu);
+          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+
+          const deliveryPriceToShow_de = Number(
+            deliveryPriceDe * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_inEu = Number(
+            deliveryPriceInEu * exchangeRates[userValute]
+          ).toFixed(2);
+          const deliveryPriceToShow_outEu = Number(
+            deliveryPriceOutEu * exchangeRates[userValute]
+          ).toFixed(2);
+
+          // если товар продается без скидки
+          let price_eu_toReturn = (itemPrice - writeOffFromEachItem_inEu).toFixed(2)
+          let priceToShow_toReturn = (Number(convertedPrice) - writeOffFromEachItem).toFixed(2)
+          let isWithCashbackSale_toReturn = true
+          let totalpriceItemWithCashback_toReturn = ((Number(convertedPrice) - writeOffFromEachItem)*itemQty).toFixed(2)
+
+
+          // если товар продается уже по скидке
+          if (good.isSaleNow){
+            price_eu_toReturn = itemPrice.toFixed(2)
+            priceToShow_toReturn = convertedPrice
+            isWithCashbackSale_toReturn = false
+            totalpriceItemWithCashback_toReturn = (convertedPrice * itemQty).toFixed(2)
+          }
+
+
+          return {
+            name_en: good.name_en,
+            name_de: good.name_de,
+            name_ru: good.name_ru,
+            price_eu: price_eu_toReturn,
+            price_euNoCashbackApplied: itemPrice,
+            priceToShow: priceToShow_toReturn,
+            priceToShowNoPromoApplied: convertedPrice,
+            deliveryPriceToShow_de: deliveryPriceToShow_de,
+            deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
+            deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+            deliveryPriceEU_de: deliveryPriceDe,
+            deliveryPriceEU_inEu: deliveryPriceInEu,
+            deliveryPriceEU_outEu: deliveryPriceOutEu,
+            qty: itemQty,
+            itemId: item.itemId,
+            img: good.file?.url || null,
+            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
+            totalpriceItemWithCashback: totalpriceItemWithCashback_toReturn,
+            valuteToShow: userValute,
+            isSaleNow: good.isSaleNow,
+            isWithCashbackSale: isWithCashbackSale_toReturn,
+            
+            
+          };
+        } catch (error) {
+          console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
+          return null;
+        }
+      })
+    );
+
+           // Фильтруем null значения (если какие-то товары не найдены)
+    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
+
+    // Рассчитываем общее количество товаров и общую сумму
+    const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
+    const totalPrice = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItem),
+      0
+    );
+    const totalPriceWithCashback = filteredGoods.reduce(
+      (sum, item) => sum + Number(item.totalpriceItemWithCashback),
+      0
+    );
+
+    
+
+    return res.json({
+      status: 'ok',
+      goods: filteredGoods,
+      totalQty: totalQty,
+      valuteToShow: userValute,
+      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
+      totalPriceCartWithCashback: parseFloat(totalPriceWithCashback.toFixed(2)),
+      textForUser: `${cashbackValue} ${codeApplied[userLanguage]}`
+    });
+
+    
+
+    
+
+  } catch (error) {
+    console.error('[Error] Checking promocode:', error);
+    console.error('[Error] Stack:', error.stack);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error while checking promocode',
+      error: error.message
+    });
+  }
+});
+
+
+
+
+
+
 
 /////////////////////
 
