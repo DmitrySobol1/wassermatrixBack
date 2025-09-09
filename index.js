@@ -126,7 +126,8 @@ app.post(
               console.log('баллы:',shouldBeCashbacked, ' валюта юзера:',cashbackValute )
 
               const exchangeRates = await currencyConverter();
-              const convertedCashback = shouldBeCashbacked / exchangeRates[cashbackValute]
+              // const convertedCashback = Number((shouldBeCashbacked / exchangeRates[cashbackValute]).toFixed(2))
+              const convertedCashback = Math.round((shouldBeCashbacked / exchangeRates[cashbackValute]) * 100) / 100
 
               console.log('конвертированные баллы:',convertedCashback, ' евро:' )
               
@@ -142,6 +143,42 @@ app.post(
             await updatedOrder.save();
 
             }
+
+
+            
+            // списываем кешбек, если пользователь применил списание
+            if (updatedOrder.typeLoyaltySystem == 'writeOffCashback') {
+
+              // const cashbackValute = updatedOrder.cashbackValute
+              // const shouldBeCashbacked = updatedOrder.shouldBeCashbacked
+
+              console.log('списание всего кешбека')
+              // console.log('баллы:',shouldBeCashbacked, ' валюта юзера:',cashbackValute )
+
+              // const exchangeRates = await currencyConverter();
+              // // const convertedCashback = Number((shouldBeCashbacked / exchangeRates[cashbackValute]).toFixed(2))
+              // const convertedCashback = Math.round((shouldBeCashbacked / exchangeRates[cashbackValute]) * 100) / 100
+
+              // console.log('конвертированные баллы:',convertedCashback, ' евро:' )
+              
+              const updatedUser = await UserModel.findOneAndUpdate(
+            { tlgid: updatedOrder.tlgid }, // условие поиска
+            {
+               cashbackBall: 0 
+            },
+            { new: true } 
+          );
+
+            updatedOrder.isCashbackOperationDone = 'cashback-writtenOff' 
+            await updatedOrder.save();
+
+            }
+
+
+
+
+
+
 
 
             // Отмечаем промокод как использованный, если он был применен
@@ -1025,7 +1062,7 @@ app.get('/api/user_get_orders', async (req, res) => {
     const valute = user?.valute || 'eur';
     const cashbackBall_inEu = user?.cashbackBall
 
-    const cashbackBall = Number(cashbackBall_inEu) * Number(exchangeRates[valute])
+    const cashbackBall = (Number(cashbackBall_inEu) * Number(exchangeRates[valute])).toFixed(2)
 
     // Получаем заказы с оплатой
     const orders = await OrdersModel.find({ tlgid, payStatus: true })
@@ -4320,11 +4357,15 @@ app.post('/api/writeoff_cashback', async (req, res) => {
     }
 
     const writeOffFromEachItem = Number((cashbackValue/countItemsWithoutSale).toFixed(2))
-    const writeOffFromEachItem_inEu = writeOffFromEachItem * exchangeRates[userValute]
+    const writeOffFromEachItem_inEu = writeOffFromEachItem / exchangeRates[userValute]
+
+
 
     console.log('countItemsWithoutSale',countItemsWithoutSale)
     console.log('writeOffFromEachItem',writeOffFromEachItem)
+    console.log('writeOffFromEachItem_inEu',writeOffFromEachItem_inEu)
     
+    // return
     
           
     
