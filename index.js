@@ -4505,14 +4505,16 @@ try {
 
   console.log('запрос на реферальную пару пришел')
 
-  const { father, son } = req.body
+  const { father, son, username } = req.body
 
   console.log('father=',father)
   console.log('son=',son)
+  console.log('username=',username)
 
   const doc = new ReferalsModel({
       father:father,
-      son:son
+      son:son,
+      username: username
     });
 
     console.log('doc=',doc)

@@ -8,6 +8,10 @@ const ReferalsSchema = new mongoose.Schema(
         type: Boolean,
         default: false
     },   
+    username: {
+      type: String,
+      default: null
+    }
     
   },
   {
