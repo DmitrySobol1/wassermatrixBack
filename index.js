@@ -4494,12 +4494,19 @@ app.post('/api/create_new_referalPair', async (req, res) => {
 
 try {
 
+  console.log('запрос на реферальную пару пришел')
+
   const { father, son } = req.body
+
+  console.log('father=',father)
+  console.log('son=',son)
 
   const doc = new ReferalsModel({
       father:father,
       son:son
     });
+
+    console.log('doc=',doc)
 
     await doc.save();
 
