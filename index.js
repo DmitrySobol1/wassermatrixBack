@@ -16,6 +16,7 @@ import AdminPasswordModel from './models/adminPassword.js';
 import PromocodesModel from './models/promocodes.js';
 import PromocodesPersonalModel from './models/promocodesPersonal.js';
 import CashbackBallModel from './models/cashbackball.js';
+import ReferalsModel from './models/referals.js';
 
 
 import { Convert } from 'easy-currencies';
@@ -4488,6 +4489,27 @@ app.post('/api/writeoff_cashback', async (req, res) => {
   }
 });
 
+
+app.post('/api/create_new_referalPair', async (req, res) => {
+
+try {
+
+  const { father, son } = req.body
+
+  const doc = new ReferalsModel({
+      father:father,
+      son:son
+    });
+
+    await doc.save();
+
+    res.status(200).json({result: 'created'})
+
+} catch {
+
+}
+
+})
 
 
 
