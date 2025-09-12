@@ -4507,9 +4507,9 @@ try {
 
   const { father, son, username } = req.body
 
-  console.log('father=',father)
-  console.log('son=',son)
-  console.log('username=',username)
+  console.log('father = ',father)
+  console.log('son = ',son)
+  console.log('username = ',username)
 
   const doc = new ReferalsModel({
       father:father,
