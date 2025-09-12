@@ -4505,9 +4505,14 @@ try {
 
     res.status(200).json({result: 'created'})
 
-} catch {
-
-}
+} catch (error) {
+    console.error('[Error] creating ref pair:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Server error creating ref pair',
+      error: error.message
+    });
+  }
 
 })
 
