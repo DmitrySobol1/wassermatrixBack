@@ -2,8 +2,8 @@ import mongoose from 'mongoose';
 
 const ReferalsSchema = new mongoose.Schema(
   {
-    father: String,   
-    son: String,   
+    father: Number,   
+    son: Number,   
     isSonEnterToApp: {
         type: Boolean,
         default: false

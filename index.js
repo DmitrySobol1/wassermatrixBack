@@ -312,6 +312,15 @@ app.post('/api/enter', async (req, res) => {
     if (!user) {
       await createNewUser(req.body.tlgid, req.body.jbid);
       const userData = { result: 'showOnboarding' };
+
+      // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку 
+      await ReferalsModel.updateOne(
+        { son: req.body.tlgid,
+          isSonEnterToApp: false
+         },
+        { isSonEnterToApp: true }
+      );
+
       return res.json({ userData });
     }
 
