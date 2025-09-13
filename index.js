@@ -2409,7 +2409,7 @@ async function createPersonalPromoForReferals(tlgidValue, saleValue,qtyOfReferal
     
     // функция генерации промокода
     const generateRandomCode = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
       let result = '';
       for (let i = 0; i < 7; i++) {
         result += chars.charAt(Math.floor(Math.random() * chars.length));
