@@ -53,6 +53,10 @@ const PromocodesPersonalSchema = new mongoose.Schema(
     forFirstPurshase: {
       type: Boolean, 
       default: false,
+    },
+    generatedBy: {
+      type: String,
+      default: 'admin'
     }
   },
   {
