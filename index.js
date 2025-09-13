@@ -178,7 +178,17 @@ app.post(
             }
 
 
-
+            //  начисляем кешбек рефереру, если покупка была совершена его рефералом
+             const findReferer = await ReferalsModel.findOne(
+            { son: updatedOrder.tlgid }, // условие поиска
+          );
+            
+          if (findReferer) {
+            const referer = findReferer.father
+            console.log('user have referer - начисляем', referer)
+          } else {
+            onsole.log('user NO have referer - не начисляем')
+          }
 
 
 
