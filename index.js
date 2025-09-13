@@ -4906,11 +4906,13 @@ app.put('/api/referals_promoForPurchase/:id', async (req, res) => {
     const { id } = req.params;
     const { sale } = req.body;
 
+    console.log('sale=', sale)
+
     // Валидация
-    if (!sale) {
+    if (typeof sale !== 'number' || sale < 0) {
       return res.status(400).json({
         status: 'error',
-        error: 'Sale field is required'
+        error: 'Sale field is required and must be 0 or positive number'
       });
     }
 
