@@ -202,7 +202,7 @@ app.post(
                 }
               }
 
-              const ballToAdd = totalSumInEuro * saleValue;
+              const ballToAdd = totalSumInEuro * (saleValue/100);
               console.log(`Начисляем рефереру ${referer}: ${ballToAdd} баллов (сумма заказа: ${totalSumInEuro} EUR, процент: ${saleValue})`);
 
               // найти в БД users пользователя с tlgid = referer и в поле cashbackBall прибавить значение из ballToAdd
