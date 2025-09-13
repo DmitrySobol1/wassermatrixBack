@@ -186,8 +186,43 @@ app.post(
           if (findReferer) {
             const referer = findReferer.father
             console.log('user have referer - начисляем', referer)
+
+            // найти в БД referals_promoForPurchase параметр sale и сохранить в const saleValue
+            const promoForPurchase = await ReferalsPromoForPurchaseModel.findOne();
+            const saleValue = promoForPurchase ? promoForPurchase.sale : 0;
+
+            if (saleValue > 0) {
+              // посчитать количество баллов (сохранить в const ballToAdd) - это сумма всех товаров в корзине в евро * saleValue
+              let totalSumInEuro = 0;
+              if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
+                for (const item of updatedOrder.goods) {
+                  if (item.actualPurchasePriceInEu && item.qty) {
+                    totalSumInEuro += item.actualPurchasePriceInEu * item.qty;
+                  }
+                }
+              }
+
+              const ballToAdd = totalSumInEuro * saleValue;
+              console.log(`Начисляем рефереру ${referer}: ${ballToAdd} баллов (сумма заказа: ${totalSumInEuro} EUR, процент: ${saleValue})`);
+
+              // найти в БД users пользователя с tlgid = referer и в поле cashbackBall прибавить значение из ballToAdd
+              const updatedReferer = await UserModel.findOneAndUpdate(
+                { tlgid: referer },
+                { $inc: { cashbackBall: ballToAdd } },
+                { new: true }
+              );
+
+              if (updatedReferer) {
+                console.log(`Успешно начислено ${ballToAdd} баллов рефереру ${referer}. Новый баланс: ${updatedReferer.cashbackBall}`);
+              } else {
+                console.log(`Не удалось найти реферера с tlgid: ${referer}`);
+              }
+            } else {
+              console.log('Процент для начисления реферального кешбека не установлен или равен 0');
+            }
+
           } else {
-            console.log('user NO have referer - не начисляем')
+            console.log('user have NO referer - не начисляем кешбек рефереру')
           }
 
 
