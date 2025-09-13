@@ -187,7 +187,7 @@ app.post(
             const referer = findReferer.father
             console.log('user have referer - начисляем', referer)
           } else {
-            сonsole.log('user NO have referer - не начисляем')
+            console.log('user NO have referer - не начисляем')
           }
 
 
