@@ -4734,7 +4734,7 @@ app.get('/api/get_referals', async (req, res) => {
 // GET - получение всех записей referals_promoForQuantity
 app.get('/api/referals_promoForQuantity', async (req, res) => {
   try {
-    const items = await ReferalsPromoForQuantityModel.find().sort({ createdAt: -1 });
+    const items = await ReferalsPromoForQuantityModel.find().sort({ qty: 1 });
     
     res.status(200).json(items);
   } catch (error) {
