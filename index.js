@@ -357,7 +357,7 @@ app.post('/api/enter', async (req, res) => {
 
     //создание юзера
     if (!user) {
-      await createNewUser(req.body.tlgid, req.body.jbid);
+      await createNewUser(req.body.tlgid, req.body.jbid, req.body.language);
       const userData = { result: 'showOnboarding' };
 
       // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку 
@@ -419,13 +419,13 @@ app.post('/api/enter', async (req, res) => {
   }
 });
 
-async function createNewUser(tlgid, jbid) {
+async function createNewUser(tlgid, jbid, lang) {
   try {
     const doc = new UserModel({
       tlgid: tlgid,
       jbid: jbid,
       valute: '€',
-      language: 'en',
+      language: lang,
     });
 
     await doc.save();
