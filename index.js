@@ -358,7 +358,7 @@ app.post('/api/enter', async (req, res) => {
     //создание юзера
     if (!user) {
       await createNewUser(req.body.tlgid, req.body.jbid, req.body.language);
-      const userData = { result: 'showOnboarding' };
+      const userData = { result: 'showOnboarding', language:req.body.language  };
 
       // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку 
       const resp = await ReferalsModel.findOneAndUpdate(
