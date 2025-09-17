@@ -429,6 +429,85 @@ async function createNewUser(tlgid, jbid, lang) {
     });
 
     await doc.save();
+
+    // отправить запрос в JB для создания тегов для дожима и рассылок
+    
+    const jbtoken = process.env.JB_TOKEN
+    const jburlSetTag = process.env.JB_URL_SET_TAG
+    const jburlDelTag = process.env.JB_URL_DEL_TAG
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+    const bodySetTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "notAddGoodAtCart",
+    }
+    
+    const bodyDelTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "openBot",
+    }
+    
+    const bodyUpdateVar = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "context",
+      value: "series2_message1"
+    }
+
+    
+    // const response1 = await axios.post(jburlSetTag, bodySetTag, 
+    //  { headers: {
+    //   'Content-Type': 'application/json',
+    // }}
+    // );
+
+    // console.log('response 1', response1.status , response1.statusText)
+    
+    // const response2 = await axios.post(jburlDelTag, bodyDelTag, 
+    //  { headers: {
+    //   'Content-Type': 'application/json',
+    // }}
+    // );
+
+    // console.log('response 2', response2.status , response2.statusText)
+    
+    // const response3 = await axios.post(jburlUpdateVar, bodyUpdateVar, 
+    //  { headers: {
+    //   'Content-Type': 'application/json',
+    // }}
+    // );
+
+    // console.log('response 3', response3.status , response3.statusText)
+
+    const safeRequest = async (url, body, headers) => {      
+    try {
+      return await axios.post(url, body, { headers });     
+    } catch (error) {
+      console.error('Request failed:', error.message);     
+      return null;
+    }
+  };
+
+  const [response1, response2, response3] = await
+  Promise.all([
+    safeRequest(jburlSetTag, bodySetTag, {
+  'Content-Type': 'application/json' }),
+    safeRequest(jburlDelTag, bodyDelTag, {
+  'Content-Type': 'application/json' }),
+    safeRequest(jburlUpdateVar, bodyUpdateVar, {
+  'Content-Type': 'application/json' })
+  ]);
+
+
+  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot, переменная context=series2_message1')
+  console.log('response 1', response1.status , response1.statusText)
+  console.log('response 2', response2.status , response2.statusText)
+  console.log('response 3', response3.status , response3.statusText)
+
+
+
   } catch (err) {
     console.log(err);
   }
