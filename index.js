@@ -1986,10 +1986,35 @@ app.post('/api/change_valute', async (req, res) => {
 // смена языка в БД
 app.post('/api/change_language', async (req, res) => {
   try {
-    await UserModel.findOneAndUpdate(
+    const updatedUser = await UserModel.findOneAndUpdate(
       { tlgid: req.body.tlgid },
-      { $set: { language: req.body.language } }
+      { $set: { language: req.body.language } },
+      { new: true }
     );
+
+    // console.log('updatedUser', updatedUser)
+
+    const jbid = updatedUser.jbid
+    const jburl = process.env.JB_URL_UPDATE_VAR
+    const jbtoken = process.env.JB_TOKEN
+
+    const bodyForRqst = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "language",
+      value: req.body.language
+    }
+
+    
+    const response = await axios.post(jburl, bodyForRqst, 
+     { headers: {
+      'Content-Type': 'application/json',
+    }}
+    );
+
+    // console.log('response from jb', response.status)
+    // console.log('response from jb', response.statusText )
+
 
     return res.json({ status: 'ok' });
   } catch (err) {
