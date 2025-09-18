@@ -466,7 +466,7 @@ async function createNewUser(tlgid, jbid, lang) {
       api_token: jbtoken,
       contact_id: jbid,
       name: "crmStatus",
-      value: 1
+      value: "1"
     }
 
     
