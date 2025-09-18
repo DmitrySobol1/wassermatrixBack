@@ -30,7 +30,7 @@ const UserSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
-    crmSatatus : {
+    crmStatus : {
       type: Number,
       default: 1
     }
