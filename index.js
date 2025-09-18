@@ -461,6 +461,13 @@ async function createNewUser(tlgid, jbid, lang) {
       name: "context",
       value: "series2_message1"
     }
+    
+    const bodyUpdateVar2 = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "crmStatus",
+      value: 1
+    }
 
     
     // const response1 = await axios.post(jburlSetTag, bodySetTag, 
@@ -496,7 +503,7 @@ async function createNewUser(tlgid, jbid, lang) {
     }
   };
 
-  const [response1, response2, response3, response4] = await
+  const [response1, response2, response3, response4, response5] = await
   Promise.all([
     safeRequest(jburlSetTag, bodySetTag, {
   'Content-Type': 'application/json' }),
@@ -505,15 +512,18 @@ async function createNewUser(tlgid, jbid, lang) {
     safeRequest(jburlDelTag, bodyDelTag2, {
   'Content-Type': 'application/json' }),
     safeRequest(jburlUpdateVar, bodyUpdateVar, {
+  'Content-Type': 'application/json' }),
+    safeRequest(jburlUpdateVar, bodyUpdateVar2, {
   'Content-Type': 'application/json' })
   ]);
 
 
-  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot и crmStatus0(если он есть ), переменная context=series2_message1')
+  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot(если он есть) и crmStatus0(если он есть), переменная context=series2_message1 и переменная crmStatus=1')
   console.log('response 1', response1.status , response1.statusText)
   console.log('response 2', response2.status , response2.statusText)
   console.log('response 3', response3.status , response3.statusText)
   console.log('response 4', response4.status , response4.statusText)
+  console.log('response 5', response5.status , response5.statusText)
 
 
 
