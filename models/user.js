@@ -29,6 +29,10 @@ const UserSchema = new mongoose.Schema(
     cashbackBall: {
       type: Number,
       default: 0
+    },
+    crmSatatus : {
+      type: Number,
+      default: 1
     }
   },
   {

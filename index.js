@@ -5073,6 +5073,47 @@ app.delete('/api/referals_promoForPurchase/:id', async (req, res) => {
   }
 });
 
+
+
+
+
+
+
+
+// изменить статус crmStatus (из JB)
+app.post('/api/change_crmstatus', async (req, res) => {
+  try {
+    const { tlgid, crmStatus } = req.body;
+
+    // Валидация
+    if (!tlgid || !crmStatus) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid and crmStatus are required'
+      });
+    }
+
+          const updatedUser = await UserModel.findOneAndUpdate(
+            { tlgid: tlgid }, 
+            {
+              crmStatus: crmStatus
+            },
+            { new: true } 
+          );
+
+    res.status(200).json({
+      status: 'changed',
+    });
+  } catch (error) {
+    console.error('Ошибка при изменении статуса crmStatus', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при изменении записи'
+    });
+  }
+});
+
+
 /////////////////////
 
 app.listen(PORT, (err) => {
