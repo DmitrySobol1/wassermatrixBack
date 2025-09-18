@@ -5088,7 +5088,7 @@ app.post('/api/change_crmstatus', async (req, res) => {
     console.log('get from jb | tlgid=',tlgid, ' crmstatus=',crmstatus)
 
     // Валидация
-    if (!tlgid || !crmstatus) {
+    if (!tlgid || crmstatus === undefined || crmstatus === null) {
       return res.status(400).json({
         status: 'error',
         error: 'tlgid and crmStatus are required'
