@@ -449,6 +449,12 @@ async function createNewUser(tlgid, jbid, lang) {
       name: "openBot",
     }
     
+    const bodyDelTag2 = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "crmStatus0",
+    }
+    
     const bodyUpdateVar = {
       api_token: jbtoken,
       contact_id: jbid,
@@ -490,21 +496,24 @@ async function createNewUser(tlgid, jbid, lang) {
     }
   };
 
-  const [response1, response2, response3] = await
+  const [response1, response2, response3, response4] = await
   Promise.all([
     safeRequest(jburlSetTag, bodySetTag, {
   'Content-Type': 'application/json' }),
     safeRequest(jburlDelTag, bodyDelTag, {
+  'Content-Type': 'application/json' }),
+    safeRequest(jburlDelTag, bodyDelTag2, {
   'Content-Type': 'application/json' }),
     safeRequest(jburlUpdateVar, bodyUpdateVar, {
   'Content-Type': 'application/json' })
   ]);
 
 
-  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot, переменная context=series2_message1')
+  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot и crmStatus0(если он есть ), переменная context=series2_message1')
   console.log('response 1', response1.status , response1.statusText)
   console.log('response 2', response2.status , response2.statusText)
   console.log('response 3', response3.status , response3.statusText)
+  console.log('response 4', response4.status , response4.statusText)
 
 
 
