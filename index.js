@@ -5083,10 +5083,12 @@ app.delete('/api/referals_promoForPurchase/:id', async (req, res) => {
 // изменить статус crmStatus (из JB)
 app.post('/api/change_crmstatus', async (req, res) => {
   try {
-    const { tlgid, crmStatus } = req.body;
+    const { tlgid, crmstatus } = req.body;
+
+    console.log('get from jb | tlgid=',tlgid, ' crmstatus=',crmstatus)
 
     // Валидация
-    if (!tlgid || !crmStatus) {
+    if (!tlgid || !crmstatus) {
       return res.status(400).json({
         status: 'error',
         error: 'tlgid and crmStatus are required'
@@ -5096,7 +5098,7 @@ app.post('/api/change_crmstatus', async (req, res) => {
           const updatedUser = await UserModel.findOneAndUpdate(
             { tlgid: tlgid }, 
             {
-              crmStatus: crmStatus
+              crmStatus: crmstatus
             },
             { new: true } 
           );
