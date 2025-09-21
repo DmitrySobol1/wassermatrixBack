@@ -5457,12 +5457,12 @@ app.post('/api/change_crmstatus', async (req, res) => {
 // изменить статус crmStatus (из JB)
 app.post('/api/change_waitadmin', async (req, res) => {
   try {
-    const { tlgid, waitadmin } = req.body;
+    const { tlgid, isWaitingAdminAction } = req.body;
 
-    console.log('get from jb | tlgid=',tlgid, ' waitadmin=',waitadmin)
+    console.log('get from jb | tlgid=',tlgid, ' isWaitingAdminAction=',isWaitingAdminAction)
 
     // Валидация
-    if (!tlgid || waitadmin === undefined || waitadmin === null) {
+    if (!tlgid || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
       return res.status(400).json({
         status: 'error',
         error: 'tlgid and waitadmin are required'
@@ -5472,7 +5472,7 @@ app.post('/api/change_waitadmin', async (req, res) => {
           const updatedUser = await UserModel.findOneAndUpdate(
             { tlgid: tlgid }, 
             {
-              isWaitingAdminAction: waitadmin
+              isWaitingAdminAction: isWaitingAdminAction
             },
             { new: true } 
           );
