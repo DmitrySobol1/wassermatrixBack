@@ -802,7 +802,7 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
 
     // Получаем информацию о пользователе
     // const user = await UserModel.findById(userId);
-    const user = await UserModel.findOne(
+    const user = await UserModel.findOneAndUpdate(
       { tlgid: userTlgid },
       { isWaitingAdminAction: false },
       { new: true }
