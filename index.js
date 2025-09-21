@@ -5417,11 +5417,6 @@ app.delete('/api/referals_promoForPurchase/:id', async (req, res) => {
 
 
 
-
-
-
-
-
 // изменить статус crmStatus (из JB)
 app.post('/api/change_crmstatus', async (req, res) => {
   try {
@@ -5450,6 +5445,43 @@ app.post('/api/change_crmstatus', async (req, res) => {
     });
   } catch (error) {
     console.error('Ошибка при изменении статуса crmStatus', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при изменении записи'
+    });
+  }
+});
+
+
+
+// изменить статус crmStatus (из JB)
+app.post('/api/change_waitadmin', async (req, res) => {
+  try {
+    const { tlgid, waitadmin } = req.body;
+
+    console.log('get from jb | tlgid=',tlgid, ' waitadmin=',waitadmin)
+
+    // Валидация
+    if (!tlgid || waitadmin === undefined || waitadmin === null) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid and waitadmin are required'
+      });
+    }
+
+          const updatedUser = await UserModel.findOneAndUpdate(
+            { tlgid: tlgid }, 
+            {
+              isWaitingAdminAction: waitadmin
+            },
+            { new: true } 
+          );
+
+    res.status(200).json({
+      status: 'changed',
+    });
+  } catch (error) {
+    console.error('Ошибка при изменении параметра isWaitingAdminAction', error);
     res.status(400).json({
       status: 'error',
       error: 'Ошибка при изменении записи'
