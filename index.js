@@ -478,6 +478,10 @@ async function createNewUser(tlgid, jbid, lang) {
     }
   };
 
+
+  //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+  // м.б. далее снизить до 500мс iso 1000мс
+
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const response1 = await safeRequest(jburlSetTag, bodySetTag, {
@@ -2094,22 +2098,33 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         }
       };
 
-      const [response1, response2, response3, response4, response5, response6, response7] = await
-      Promise.all([
-        safeRequest(jburlSetTag, bodySetTag, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlDelTag, bodyDelTag, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlDelTag, bodyDelTag2, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlUpdateVar, bodyUpdateVar, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlUpdateVar, bodyUpdateVar3, {
-      'Content-Type': 'application/json' })
-        
-      ]);
+      //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+  // м.б. далее снизить до 500мс iso 1000мс
+
+      const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+      const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json' });
+      await delay(500);
+
+      const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+      'Content-Type': 'application/json' });
+      await delay(500);
+
+      const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
+      'Content-Type': 'application/json' });
+      await delay(500);
+
+      const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json' });
+      await delay(500);
+
+      const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json' });
+      await delay(500);
+
+      const response6 = await safeRequest(jburlUpdateVar, bodyUpdateVar3, {
+      'Content-Type': 'application/json' });
 
       console.log('отправка изменений в JB')
       console.log('response 1', response1.status , response1.statusText)
