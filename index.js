@@ -431,7 +431,6 @@ async function createNewUser(tlgid, jbid, lang) {
     await doc.save();
 
     // отправить запрос в JB для создания тегов для дожима и рассылок
-    
     const jbtoken = process.env.JB_TOKEN
     const jburlSetTag = process.env.JB_URL_SET_TAG
     const jburlDelTag = process.env.JB_URL_DEL_TAG
@@ -469,30 +468,6 @@ async function createNewUser(tlgid, jbid, lang) {
       value: "1"
     }
 
-    
-    // const response1 = await axios.post(jburlSetTag, bodySetTag, 
-    //  { headers: {
-    //   'Content-Type': 'application/json',
-    // }}
-    // );
-
-    // console.log('response 1', response1.status , response1.statusText)
-    
-    // const response2 = await axios.post(jburlDelTag, bodyDelTag, 
-    //  { headers: {
-    //   'Content-Type': 'application/json',
-    // }}
-    // );
-
-    // console.log('response 2', response2.status , response2.statusText)
-    
-    // const response3 = await axios.post(jburlUpdateVar, bodyUpdateVar, 
-    //  { headers: {
-    //   'Content-Type': 'application/json',
-    // }}
-    // );
-
-    // console.log('response 3', response3.status , response3.statusText)
 
     const safeRequest = async (url, body, headers) => {      
     try {
@@ -503,20 +478,26 @@ async function createNewUser(tlgid, jbid, lang) {
     }
   };
 
-  const [response1, response2, response3, response4, response5] = await
-  Promise.all([
-    safeRequest(jburlSetTag, bodySetTag, {
-  'Content-Type': 'application/json' }),
-    safeRequest(jburlDelTag, bodyDelTag, {
-  'Content-Type': 'application/json' }),
-    safeRequest(jburlDelTag, bodyDelTag2, {
-  'Content-Type': 'application/json' }),
-    safeRequest(jburlUpdateVar, bodyUpdateVar, {
-  'Content-Type': 'application/json' }),
-    safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-  'Content-Type': 'application/json' })
-  ]);
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+  const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+    'Content-Type': 'application/json' });
+  await delay(1000);
+
+  const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+    'Content-Type': 'application/json' });
+  await delay(1000);
+
+  const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
+    'Content-Type': 'application/json' });
+  await delay(1000);
+
+  const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+    'Content-Type': 'application/json' });
+  await delay(1000);
+
+  const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+    'Content-Type': 'application/json' });
 
   console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot(если он есть) и crmStatus0(если он есть), переменная context=series2_message1 и переменная crmStatus=1')
   console.log('response 1', response1.status , response1.statusText)
@@ -763,6 +744,150 @@ app.get('/api/admin_get_personal_promocodes', async (req, res) => {
     res.status(500).json({
       error: 'Server error',
       details: error.message,
+    });
+  }
+});
+
+// получить персональные промокоды для конкретного пользователя по ObjectId
+app.get('/api/admin_get_personal_promocodes/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    console.log('[API] Fetching personal promocodes for user ObjectId:', userId);
+
+    const personalPromocodes = await PromocodesPersonalModel.find({
+      tlgid: userId,  // В базе поле называется tlgid, но хранит ObjectId пользователя
+      isActive: true
+    }).sort({ createdAt: -1 });
+
+    console.log('[Database] Personal promocodes found for userId', userId, ':', personalPromocodes.length);
+
+    res.json({
+      status: 'ok',
+      promocodes: personalPromocodes,
+      total: personalPromocodes.length
+    });
+  } catch (error) {
+    console.error('[Error] Failed to fetch personal promocodes for user:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+    });
+  }
+});
+
+// отправить персональный промокод пользователю через бота
+app.post('/api/send_personalpromo_tojb', async (req, res) => {
+  try {
+    const { promocodeId, userId, userTlgid } = req.body;
+
+    console.log('[API] Sending personal promocode to user:', {
+      promocodeId,
+      userId,
+      userTlgid
+    });
+
+    // Получаем информацию о промокоде
+    const promocode = await PromocodesPersonalModel.findById(promocodeId);
+    if (!promocode) {
+      return res.status(404).json({
+        error: 'Promocode not found',
+        status: 'error'
+      });
+    }
+
+    // Получаем информацию о пользователе
+    // const user = await UserModel.findById(userId);
+    const user = await UserModel.findOne(
+      { tlgid: userTlgid },
+      { isWaitingAdminAction: false },
+      { new: true }
+    );
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        status: 'error'
+      });
+    }
+    
+    const language = user.language
+
+    const text = {
+      title : {
+        de : '🎉 Ihr persönlicher Promo-Code!',
+        en: '🎉 Your personal promocode! ',
+        ru: '🎉 Ваш персональный промокод!'
+      },
+      code: {
+        de: 'Code: ',
+        en: 'Code: ',
+        ru: 'Код: '
+      },
+      sale: {
+        de: 'Rabatt: ',
+        en: 'Doscount: ',
+        ru: 'Скидка: ',
+      },
+      valid: {
+        de: 'Gültig bis: ',
+        en: 'Valid until: ',
+        ru: 'Действует до: '
+      },
+      open: {
+        de: 'öffnen',
+        en: 'open',
+        ru: 'открыть'
+      }
+    }
+
+    const formattedDate = new Date(promocode.expiryDate).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+
+    const btnText = text.open[language]
+
+    // Формируем сообщение для отправки в Telegram
+    const message = `${text.title[language]}\n\n${text.code[language]} <code>${promocode.code}</code>\n${text.sale[language]} -${promocode.saleInPercent}%\n${text.valid[language]} ${formattedDate}`;
+
+    // Отправляем сообщение через Telegram Bot API
+    const telegramResponse = await axios.post(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+      {
+        chat_id: userTlgid,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: btnText,
+                web_app: {
+                  url: process.env.FRONTEND_URL
+                }
+              }
+            ]
+          ]
+        }
+      }
+    );
+
+    console.log('[Telegram] Message sent successfully:', telegramResponse.data);
+
+    res.json({
+      status: 'ok',
+      message: 'Promocode sent successfully',
+      telegramResponse: telegramResponse.data
+    });
+
+  } catch (error) {
+    console.error('[Error] Failed to send personal promocode:', error);
+    res.status(500).json({
+      error: 'Server error',
+      details: error.message,
+      status: 'error'
     });
   }
 });
@@ -1886,7 +2011,13 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
     const cart = await CartsModel.findOne({ tlgid: userid });
 
     if (!cart) {
-      const user = await UserModel.findOne({ tlgid: userid });
+      // const user = await UserModel.findOne({ tlgid: userid });
+      const user = await UserModel.findOneAndUpdate(
+        { tlgid: userid },
+        { crmStatus: 2},
+        { new: true}
+      
+      );
       const jbid = user.jbid;
 
       if (action === 'plus') {
@@ -1897,6 +2028,99 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
           jbid: jbid,
         });
         await newCart.save();
+
+
+        // отправить запрос в JB для создания тегов для дожима и рассылок
+        // 1) добавить тег addGoodToCartNotStartPaying
+        // 2) удалить теги notAddGoodAtCart, crmStatus0
+        // 3) изменить переменные: context = series3_message1 , crmStatus= 2
+        // 4) добавить переменную timeItemsAddedToCart - это время в unix, когда создалась корзина
+        // 5) добавить переменную messageNumber - номер дожимаещего сообщения
+
+        const jbtoken = process.env.JB_TOKEN
+        const jburlSetTag = process.env.JB_URL_SET_TAG
+        const jburlDelTag = process.env.JB_URL_DEL_TAG
+        const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+        // utc time
+        const timeItemsAddedToCart = Math.floor(Date.now() / 1000);
+
+        const bodySetTag = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "addGoodToCartNotStartPaying",
+        }
+        
+        const bodyDelTag = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "notAddGoodAtCart",
+        }
+        
+        const bodyDelTag2 = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "crmStatus0",
+        }
+        
+        const bodyUpdateVar = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "context",
+          value: "series3_message1"
+        }
+        
+        const bodyUpdateVar2 = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "crmStatus",
+          value: "2"
+        }
+        
+        const bodyUpdateVar3 = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "timeItemsAddedToCart",
+          value: `${timeItemsAddedToCart}`
+        }
+        
+
+        const safeRequest = async (url, body, headers) => {      
+        try {
+          return await axios.post(url, body, { headers });     
+        } catch (error) {
+          console.error('Request failed:', error.message);     
+          return null;
+        }
+      };
+
+      const [response1, response2, response3, response4, response5, response6, response7] = await
+      Promise.all([
+        safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlDelTag, bodyDelTag, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlDelTag, bodyDelTag2, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlUpdateVar, bodyUpdateVar3, {
+      'Content-Type': 'application/json' })
+        
+      ]);
+
+      console.log('отправка изменений в JB')
+      console.log('response 1', response1.status , response1.statusText)
+      console.log('response 2', response2.status , response2.statusText)
+      console.log('response 3', response3.status , response3.statusText)
+      console.log('response 4', response4.status , response4.statusText)
+      console.log('response 5', response5.status , response5.statusText)
+      console.log('response 6', response6.status , response6.statusText)
+
+
+
         return res.status(200).json({ status: 'ok', action: 'cart created' });
       }
       return res.status(200).json({
@@ -1955,7 +2179,93 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
 
     // Проверяем, остались ли товары в корзине
     if (cart.goods.length === 0) {
+      const foundCart = await CartsModel.findOne({ tlgid: userid });
+      const jbid = foundCart.jbid
+
       await CartsModel.deleteOne({ tlgid: userid });
+
+
+      await UserModel.findOneAndUpdate(
+        { tlgid: userid },
+        { crmStatus: 1  }
+      );
+
+
+        // возвращаем JB в пред состояние
+        // 1)  добавить тег notAddGoodAtCart
+        // 2)  удалить теги crmStatus0, addGoodToCartNotStartPaying
+        // 3)  изменить переменные: context = series2_message1 , crmStatus= 1
+
+        const jbtoken = process.env.JB_TOKEN
+        const jburlSetTag = process.env.JB_URL_SET_TAG
+        const jburlDelTag = process.env.JB_URL_DEL_TAG
+        const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+        const bodySetTag = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "notAddGoodAtCart",
+        }
+        
+        const bodyDelTag = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "addGoodToCartNotStartPaying",
+        }
+        
+        const bodyDelTag2 = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "crmStatus0",
+        }
+        
+        const bodyUpdateVar = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "context",
+          value: "series2_message1"
+        }
+        
+        const bodyUpdateVar2 = {
+          api_token: jbtoken,
+          contact_id: jbid,
+          name: "crmStatus",
+          value: "1"
+        }
+
+
+        const safeRequest = async (url, body, headers) => {      
+        try {
+          return await axios.post(url, body, { headers });     
+        } catch (error) {
+          console.error('Request failed:', error.message);     
+          return null;
+        }
+      };
+
+      const [response1, response2, response3, response4, response5] = await
+      Promise.all([
+        safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlDelTag, bodyDelTag, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlDelTag, bodyDelTag2, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json' }),
+        safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json' })
+      ]);
+
+      console.log('отправка изменений в JB')
+      console.log('response 1', response1.status , response1.statusText)
+      console.log('response 2', response2.status , response2.statusText)
+      console.log('response 3', response3.status , response3.statusText)
+      console.log('response 4', response4.status , response4.statusText)
+      console.log('response 5', response5.status , response5.statusText)
+
+
+
       return res.status(200).json({ status: 'ok', action: 'cart deleted' });
     }
 
@@ -2110,8 +2420,6 @@ app.post('/api/change_language', async (req, res) => {
     }}
     );
 
-    // console.log('response from jb', response.status)
-    // console.log('response from jb', response.statusText )
 
 
     return res.json({ status: 'ok' });

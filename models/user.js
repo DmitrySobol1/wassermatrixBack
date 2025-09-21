@@ -33,6 +33,10 @@ const UserSchema = new mongoose.Schema(
     crmStatus : {
       type: Number,
       default: 1
+    },
+    isWaitingAdminAction: {
+      type: Boolean,
+      default: false
     }
   },
   {
