@@ -4080,7 +4080,7 @@ app.post('/api/create_payment_session', async (req, res) => {
 
     // Получаем информацию о пользователе
     const user = await UserModel.findOneAndUpdate(
-      { tlgid: tlgid },
+      { tlgid: Number(tlgid) },
       { crmStatus: 3 }, 
       { new: true }
     );
