@@ -4079,7 +4079,13 @@ app.post('/api/create_payment_session', async (req, res) => {
     });
 
     // Получаем информацию о пользователе
-    const user = await UserModel.findOne({ tlgid: tlgid });
+    const user = await UserModel.findOneAndUpdate(
+      { tlgid: tlgid },
+      { crmStatus: 3 }, 
+      { new: true }
+    );
+    
+    
     const jbid = user?.jbid;
 
     // Находим статус "new" или используем дефолтный
@@ -4122,6 +4128,88 @@ app.post('/api/create_payment_session', async (req, res) => {
       cashbackValute:cashbackValute
       
     });
+
+
+
+    // отправить данные в JB
+    const jbtoken = process.env.JB_TOKEN
+    const jburlSetTag = process.env.JB_URL_SET_TAG
+    const jburlDelTag = process.env.JB_URL_DEL_TAG
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+    const bodySetTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "startPayingButNotPayed",
+    }
+    
+    const bodyDelTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "addGoodToCartNotStartPaying",
+    }
+    
+    
+    const bodyUpdateVar = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "context",
+      value: "series4_message1"
+    }
+    
+    const bodyUpdateVar2 = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: "crmStatus",
+      value: "3"
+    }
+
+
+    const safeRequest = async (url, body, headers) => {      
+    try {
+      return await axios.post(url, body, { headers });     
+    } catch (error) {
+      console.error('Request failed:', error.message);     
+      return null;
+    }
+  };
+
+
+  //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+    'Content-Type': 'application/json' });
+  await delay(500);
+
+  const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+    'Content-Type': 'application/json' });
+  await delay(500);
+
+
+  const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+    'Content-Type': 'application/json' });
+  await delay(500);
+
+  const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+    'Content-Type': 'application/json' });
+
+  console.log('данные в JB отправлены')
+  console.log('response 1', response1.status , response1.statusText)
+  console.log('response 2', response2.status , response2.statusText)
+  console.log('response 3', response3.status , response3.statusText)
+  console.log('response 4', response4.status , response4.statusText)
+
+
+
+
+
+
+
+
+
+
 
     await newOrder.save();
 
@@ -5414,7 +5502,50 @@ app.delete('/api/referals_promoForPurchase/:id', async (req, res) => {
   }
 });
 
+// изменить статус isWaitingAdminAction (из админки)
+app.post('/api/admin_update_waiting_status', async (req, res) => {
+  try {
+    const { userId, isWaitingAdminAction } = req.body;
 
+
+
+    console.log('admin_update_waiting_status | userId=', userId, ' isWaitingAdminAction=', isWaitingAdminAction);
+
+    // Валидация
+    if (!userId || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'userId and isWaitingAdminAction are required'
+      });
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        isWaitingAdminAction: isWaitingAdminAction
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      status: 'ok',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Ошибка при изменении параметра isWaitingAdminAction', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при изменении записи'
+    });
+  }
+});
 
 // изменить статус crmStatus (из JB)
 app.post('/api/change_crmstatus', async (req, res) => {

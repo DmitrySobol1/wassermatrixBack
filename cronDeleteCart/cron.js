@@ -7,7 +7,9 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
 
 
-//Сценарий, для проверки, прошел ли трансфер со счета клиента на мастер кошелек
+//Сценарий, для: 
+// проверки корзин и отправки юзеру сообщения на 6ой день
+// удаления корзины на 7ой день
 
 
 cron.schedule(
