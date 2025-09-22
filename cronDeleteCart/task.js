@@ -8,12 +8,13 @@
 // import dotenv from 'dotenv';
 // dotenv.config();
 
-// EXECUTE
-// executeCheckTask();
-
 // PROD
 import dotenv from 'dotenv';
 dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
+
+// EXECUTE
+// executeCheckTask();
+
 
 // import { logger } from '../middlewares/error-logger.js'
 
@@ -67,9 +68,86 @@ mongoose
               });
             }
 
+         
             
             
-            const jbid = user.jbid  
+
+
+
+            
+            const language = user.language
+        
+            const text = {
+              title : {
+                de: '⏳ Ihr Warenkorb wird morgen gelöscht',
+                en: '⏳ Your cart will be deleted tomorrow',
+                ru: '⏳ Завтра удалим вашу корзину'
+              },
+              subtitle: {
+                de: 'Damit die Waren Ihnen sicher gehören – geben Sie Ihre Bestellung jetzt auf',
+                en: 'To make sure you get the goods you want, place your order right now',
+                ru: 'Чтобы товары остались за вами — оформите заказ прямо сейчас'
+              },
+              
+              
+              open: {
+                de: 'öffnen',
+                en: 'open',
+                ru: 'открыть'
+              }
+            }
+        
+            
+            const btnText = text.open[language]
+        
+            // Формируем сообщение для отправки в Telegram
+            const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
+        
+            // Отправляем сообщение через Telegram Bot API
+            const telegramResponse = await axios.post(
+              `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+              {
+                chat_id: cart.tlgid,
+                text: message,
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: btnText,
+                        web_app: {
+                          url: process.env.FRONTEND_URL
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            );
+        
+            console.log('[Telegram] Message sent successfully:', telegramResponse.data);
+        
+
+
+
+      } else if ( delta >= 7) {
+
+
+         const user = await UserModel.findOneAndUpdate(
+              { tlgid: cart.tlgid },
+              { crmStatus: 0 }, 
+              { new: true}
+          );
+            
+          if (!user) {
+              return res.status(404).json({
+                error: 'User not found',
+                status: 'error'
+              });
+            }
+
+
+          const jbid = user.jbid  
 
 
 
@@ -155,73 +233,6 @@ mongoose
 
 
 
-
-
-
-
-
-
-
-
-
-
-            
-            const language = user.language
-        
-            const text = {
-              title : {
-                de: '⏳ Ihr Warenkorb wird morgen gelöscht',
-                en: '⏳ Your cart will be deleted tomorrow',
-                ru: '⏳ Завтра удалим вашу корзину'
-              },
-              subtitle: {
-                de: 'Damit die Waren Ihnen sicher gehören – geben Sie Ihre Bestellung jetzt auf',
-                en: 'To make sure you get the goods you want, place your order right now',
-                ru: 'Чтобы товары остались за вами — оформите заказ прямо сейчас'
-              },
-              
-              
-              open: {
-                de: 'öffnen',
-                en: 'open',
-                ru: 'открыть'
-              }
-            }
-        
-            
-            const btnText = text.open[language]
-        
-            // Формируем сообщение для отправки в Telegram
-            const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
-        
-            // Отправляем сообщение через Telegram Bot API
-            const telegramResponse = await axios.post(
-              `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
-              {
-                chat_id: cart.tlgid,
-                text: message,
-                parse_mode: 'HTML',
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: btnText,
-                        web_app: {
-                          url: process.env.FRONTEND_URL
-                        }
-                      }
-                    ]
-                  ]
-                }
-              }
-            );
-        
-            console.log('[Telegram] Message sent successfully:', telegramResponse.data);
-        
-
-
-
-      } else if ( delta >= 7) {
         await CartsModel.deleteOne({
           _id: cart._id
         })
