@@ -4134,7 +4134,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       
     });
 
-    onsole.log('we are here 4')
+    console.log('we are here 4')
 
     // отправить данные в JB
     const jbtoken = process.env.JB_TOKEN
