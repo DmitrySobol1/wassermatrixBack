@@ -62,10 +62,8 @@ mongoose
           );
             
           if (!user) {
-              return res.status(404).json({
-                error: 'User not found',
-                status: 'error'
-              });
+              return 
+              
             }
 
          
@@ -140,10 +138,8 @@ mongoose
           );
             
           if (!user) {
-              return res.status(404).json({
-                error: 'User not found',
-                status: 'error'
-              });
+              return 
+              
             }
 
 

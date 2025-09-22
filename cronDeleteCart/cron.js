@@ -19,7 +19,7 @@ cron.schedule(
       await executeCheckTask();
       console.log('✅ CRON1 выполнен');
     } catch (err) {
-    logger.error({
+    console.error({
           cron_title: 'Ошибка в CRON 1 > при выполнении файла task.js',
           cron_message: err.message,
           dataFromServer: err.response?.data,
