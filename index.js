@@ -4063,6 +4063,8 @@ app.post('/api/create_payment_session', async (req, res) => {
 
     console.log('lineItems', lineItems);
 
+    console.log('we are here 1')
+
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -4085,7 +4087,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       { new: true }
     );
     
-    console.log('we are here')
+    console.log('we are here 2')
     
     const jbid = user?.jbid;
 
@@ -4101,6 +4103,8 @@ app.post('/api/create_payment_session', async (req, res) => {
       });
       await defaultStatus.save();
     }
+
+    console.log('we are here 3')
 
     // Создаем заказ с stripeSessionId, но payStatus=false до подтверждения
     const newOrder = new OrdersModel({
@@ -4130,7 +4134,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       
     });
 
-
+    onsole.log('we are here 4')
 
     // отправить данные в JB
     const jbtoken = process.env.JB_TOKEN
