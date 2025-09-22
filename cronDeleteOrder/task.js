@@ -5,15 +5,15 @@
 // 4) расскоменти EXECUTE
 
 // TEST
-import dotenv from 'dotenv';
-dotenv.config();
+// import dotenv from 'dotenv';
+// dotenv.config();
 
 // PROD
-// import dotenv from 'dotenv';
-// dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
+import dotenv from 'dotenv';
+dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
 
 // EXECUTE
-executeCheckTask();
+// executeCheckTask();
 
 
 // import { logger } from '../middlewares/error-logger.js'
