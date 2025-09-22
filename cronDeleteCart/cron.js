@@ -11,7 +11,6 @@ dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
 
 
 cron.schedule(
-//   '0 10 * * *',  
   '0/2 * * * *',
   async () => {
     console.log('🚀 Запуск CRON1 - delete carts', new Date().toISOString());
