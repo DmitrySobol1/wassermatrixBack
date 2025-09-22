@@ -31,7 +31,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 dotenv.config();
 
-import axios from 'axios';
+import axios from 'axios'; 
 import https from 'https';
 
 const PORT = process.env.PORT || 4444;
@@ -480,25 +480,24 @@ async function createNewUser(tlgid, jbid, lang) {
 
 
   //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
-  // м.б. далее снизить до 500мс iso 1000мс
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
   const response1 = await safeRequest(jburlSetTag, bodySetTag, {
     'Content-Type': 'application/json' });
-  await delay(1000);
+  await delay(500);
 
   const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
     'Content-Type': 'application/json' });
-  await delay(1000);
+  await delay(500);
 
   const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
     'Content-Type': 'application/json' });
-  await delay(1000);
+  await delay(500);
 
   const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
     'Content-Type': 'application/json' });
-  await delay(1000);
+  await delay(500);
 
   const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
     'Content-Type': 'application/json' });
