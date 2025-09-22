@@ -4085,6 +4085,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       { new: true }
     );
     
+    console.log('we are here')
     
     const jbid = user?.jbid;
 
