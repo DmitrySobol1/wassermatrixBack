@@ -55,24 +55,15 @@ mongoose
 
         console.log(`Cart ID: ${cart._id}, Days since creation: ${delta}`);
 
-         const user = await UserModel.findOneAndUpdate(
-              { tlgid: cart.tlgid },
-              { crmStatus: 0 }, 
-              { new: true}
+         const user = await UserModel.findOne(
+              { tlgid: cart.tlgid }
           );
             
           if (!user) {
               return 
-              
             }
 
-         
-            
-            
-
-
-
-            
+          
             const language = user.language
         
             const text = {
