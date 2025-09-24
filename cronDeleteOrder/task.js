@@ -35,7 +35,7 @@ mongoose
 
   export async function executeCheckTask() {
   try {
-    console.log('Начинаю cron2: delete orders...');
+    console.log('Начинаю cron2: delete orders or send msg about delivery...');
 
     // 1) Записать сегодняшную дату в переменную todayDate
     const todayDate = new Date();
@@ -49,12 +49,21 @@ mongoose
       
       // для оплаченных
       if (order.eta && order.payStatus == true ){
-        const timeDifferenceToPayedOrders =  eta.getTime() -  todayDate.getTime()
-        const deltaPayed = Math.floor(timeDifferenceToPayedOrders / (1000 * 60 * 60 * 24));  
 
+
+        const etaDate = new Date(order.eta);
+        const etaFormattedToSend = etaDate.toLocaleDateString('de-DE', {
+          day: '2-digit',
+          month: '2-digit',
+          year: '2-digit'
+        });
+        const timeDifferenceToPayedOrders = etaDate.getTime() - todayDate.getTime();
+        const deltaPayed = Math.floor(timeDifferenceToPayedOrders / (1000 * 60 * 60 * 24));
+
+         console.log('дней до ETA=', deltaPayed)
 
         // напоминание, что завтра приедет заказ
-        if (deltaNotPayed == 1 && order.payStatus == true)  {
+        if (deltaPayed == 1 && order.payStatus == true)  {
 
           console.log(`Order: Оплаченный, до дня доставки: ${deltaPayed} д.`);
 
@@ -93,7 +102,7 @@ mongoose
             const btnText = text.open[language]
         
             // Формируем сообщение для отправки в Telegram
-            const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
+            const message = `${text.title[language]}\n\n${text.subtitle[language]}${etaFormattedToSend}`;
         
             // Отправляем сообщение через Telegram Bot API
             const telegramResponse = await axios.post(
@@ -120,6 +129,82 @@ mongoose
             console.log('[Telegram] Message sent successfully:', telegramResponse.data);
 
 
+      } 
+      // сообщение, получили ли посылку?
+      else if (deltaPayed == -2 && order.payStatus == true) {
+           console.log(`Order: Оплаченный, после доставки прошло: ${deltaPayed} д.`);
+
+         const user = await UserModel.findOne(
+              { tlgid: order.tlgid }
+          );
+            
+          if (!user) {
+              return 
+            }
+
+          
+            const language = user.language
+        
+            const text = {
+              title : {
+                de: 'Haben Sie Ihre Bestellung erhalten❓',
+                en: 'Have you received your order❓',
+                ru: 'Вы получили заказ❓'
+              },
+              subtitle: {
+                de: 'bitte klicken Sie unten auf die entsprechende Schaltfläche',
+                en: 'please click the appropriate button below',
+                ru: 'нажмите, пожалуйста, соответствующую кнопку ниже'
+              },
+              
+              
+              yesBtn: {
+                de: '✅ ja',
+                en: '✅ yes',
+                ru: '✅ да'
+              },
+
+              noBtn: {
+                de: '🚫 nein',
+                en: '🚫 no',
+                ru: '🚫 нет'
+              },
+            }
+        
+            
+            const yesBtnText = text.yesBtn[language];
+            const noBtnText = text.noBtn[language];
+
+            // Формируем сообщение для отправки в Telegram
+            const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
+
+            // Отправляем сообщение через Telegram Bot API
+            const telegramResponse = await axios.post(
+              `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+              {
+                chat_id: order.tlgid,
+                text: message,
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: yesBtnText,
+                        callback_data: `order_received_y_id${order._id}`
+                      },
+                      {
+                        text: noBtnText,
+                        callback_data: `order_received_n_id${order._id}`
+                      }
+                    ]
+                  ]
+                }
+              }
+            );
+        
+            console.log('[Telegram] Message sent successfully:', telegramResponse.data);
+      } else {
+        console.log('no action with payed orders')
       }
         
       }
