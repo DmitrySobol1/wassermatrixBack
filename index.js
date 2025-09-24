@@ -104,6 +104,8 @@ app.post(
             );
 
 
+            const jbid = updatedOrder.jbid 
+
 
             // отправить запрос в JB для создания тегов для дожима и рассылок
             const jbtoken = process.env.JB_TOKEN
