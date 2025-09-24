@@ -103,6 +103,90 @@ app.post(
               `Order ${updatedOrder._id} payment status updated to true`
             );
 
+
+
+            // отправить запрос в JB для создания тегов для дожима и рассылок
+            const jbtoken = process.env.JB_TOKEN
+            const jburlSetTag = process.env.JB_URL_SET_TAG
+            const jburlDelTag = process.env.JB_URL_DEL_TAG
+            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+            const bodySetTag = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "purchaseDone",
+            }
+            
+            const bodyDelTag = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "startPayingButNotPayed",
+            }
+            
+            
+            const bodyUpdateVar = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "context",
+              value: "waitingForDelivery"
+            }
+            
+            const bodyUpdateVar2 = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "crmStatus",
+              value: "4"
+            }
+
+
+            const safeRequest = async (url, body, headers) => {      
+            try {
+              return await axios.post(url, body, { headers });     
+            } catch (error) {
+              console.error('Request failed:', error.message);     
+              return null;
+            }
+          };
+
+
+          //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+          const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+          const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+            'Content-Type': 'application/json' });
+          await delay(500);
+
+          const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+            'Content-Type': 'application/json' });
+          await delay(500);
+
+
+          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+            'Content-Type': 'application/json' });
+          await delay(500);
+
+          const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+            'Content-Type': 'application/json' });
+
+          console.log('отправить обновления в JB')
+          console.log('response 1', response1.status , response1.statusText)
+          console.log('response 2', response2.status , response2.statusText)
+          console.log('response 3', response3.status , response3.statusText)
+          console.log('response 4', response4.status , response4.statusText)
+          
+          await UserModel.findOneAndUpdate(
+            { tlgid: updatedOrder.tlgid },
+            {
+              crmStatus: 4,
+              isWaitingAdminAction: true
+            },
+            { new: true }
+          );
+
+
+
+
             // Обновляем quantityOfPurchases для каждого товара в заказе
             if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
               for (const item of updatedOrder.goods) {
@@ -137,7 +221,8 @@ app.post(
               const updatedUser = await UserModel.findOneAndUpdate(
             { tlgid: updatedOrder.tlgid }, // условие поиска
             {
-              $inc: { cashbackBall: convertedCashback }
+              $inc: { cashbackBall: convertedCashback },
+                          
             },
             { new: true } 
           );
