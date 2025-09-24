@@ -190,11 +190,11 @@ mongoose
                     [
                       {
                         text: yesBtnText,
-                        callback_data: `order_received_y_id${order._id}`
+                        callback_data: `y_${order._id}`
                       },
                       {
                         text: noBtnText,
-                        callback_data: `order_received_n_id${order._id}`
+                        callback_data: `n_${order._id}`
                       }
                     ]
                   ]

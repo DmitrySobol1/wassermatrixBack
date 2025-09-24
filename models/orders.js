@@ -83,6 +83,10 @@ const OrdersSchema = new mongoose.Schema(
     isCashbackOperationDone: {
       type: String,
       default: 'no'
+    },
+    isUserConfirmDelivery: {
+      type: Boolean,
+      default: null
     }
   },
   {

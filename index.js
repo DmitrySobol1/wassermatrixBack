@@ -5686,6 +5686,57 @@ app.post('/api/change_crmstatus', async (req, res) => {
 
 
 
+// изменить инфо в Order (из JB)
+app.post('/api/change_orderInfo', async (req, res) => {
+  try {
+    const { tlgid, orderid, answer } = req.body;
+
+    console.log('get from jb | tlgid=',tlgid, ' orderid=',orderid, ' answer=',answer)
+
+    // Валидация
+    if (!tlgid || orderid === undefined || orderid === null || !answer ) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid, orderid and answer are required'
+      });
+    }
+
+          await UserModel.findOneAndUpdate(
+            { tlgid: tlgid }, 
+            {
+              crmStatus: 6
+            },
+            { new: true } 
+          );
+
+          let answerToSet = false
+          if (answer == 'yes') {
+            answerToSet = true
+          }
+
+           await OrdersModel.findOneAndUpdate(
+            { _id: orderid }, 
+            {
+              isUserConfirmDelivery: answerToSet
+            },
+            { new: true } 
+          );
+
+    res.status(200).json({
+      status: 'changed',
+    });
+  } catch (error) {
+    console.error('Ошибка при изменении статуса crmStatus', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при изменении записи'
+    });
+  }
+});
+
+
+
+
 // изменить статус crmStatus (из JB)
 app.post('/api/change_waitadmin', async (req, res) => {
   try {
