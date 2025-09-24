@@ -4862,7 +4862,12 @@ app.post('/api/user_sendTlgMessage', async (req, res) => {
     // console.log(`Отправка уведомления о доставке клиенту: tlgid=${tlgid}, eta=${eta}, orderId=${orderId}`);
     
     // Получаем язык пользователя из БД
-    const user = await UserModel.findOne({ tlgid: tlgid });
+    const user = await UserModel.findOneAndUpdate(
+      { tlgid: tlgid },
+      { crmStatus: 5,
+        isWaitingAdminAction: false
+       }
+    );
     const language = user?.language || 'en'; // По умолчанию английский
     
     console.log(`Пользователь найден, язык: ${language}`);

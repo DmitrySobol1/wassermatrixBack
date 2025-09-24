@@ -40,23 +40,106 @@ mongoose
     // 1) Записать сегодняшную дату в переменную todayDate
     const todayDate = new Date();
 
-    // 2) Записать в массив allCarts все объекты
-    const allCarts = await OrdersModel.find();
+    // 2) Записать в массив allOrders все объекты
+    const allOrders = await OrdersModel.find();
 
-    // 3) Пройтись циклом по всем элементам allCarts
-    for (const cart of allCarts) {
-      // 4) В переменную delta записать количество дней, сколько прошло с момента создания объекта в БД
-      const createdDate = new Date(cart.createdAt);
-      const timeDifference = todayDate.getTime() - createdDate.getTime();
-      const delta = Math.floor(timeDifference / (1000 * 60 * 60 * 24)); // Конвертируем миллисекунды в дни
+    // 3) Пройтись циклом по всем элементам allOrders
+    for (const order of allOrders) {
+      
+      
+      // для оплаченных
+      if (order.eta && order.payStatus == true ){
+        const timeDifferenceToPayedOrders =  eta.getTime() -  todayDate.getTime()
+        const deltaPayed = Math.floor(timeDifferenceToPayedOrders / (1000 * 60 * 60 * 24));  
 
-      if (delta == 6){
-        // сообщение юзеру, что завтра удалим 
 
-        console.log(`Order ID: ${cart._id}, Days since creation: ${delta}`);
+        // напоминание, что завтра приедет заказ
+        if (deltaNotPayed == 1 && order.payStatus == true)  {
+
+          console.log(`Order: Оплаченный, до дня доставки: ${deltaPayed} д.`);
 
          const user = await UserModel.findOne(
-              { tlgid: cart.tlgid }
+              { tlgid: order.tlgid }
+          );
+            
+          if (!user) {
+              return 
+            }
+
+          
+            const language = user.language
+        
+            const text = {
+              title : {
+                de: '🚚 Ihre Bestellung wird in Kürze geliefert.',
+                en: '🚚 Your order will be delivered soon',
+                ru: '🚚 Заказ уже рядом'
+              },
+              subtitle: {
+                de: 'voraussichtlicher Liefertermin: ',
+                en: 'estimate date of delivery: ',
+                ru: 'примерная дата доставки: '
+              },
+              
+              
+              open: {
+                de: 'öffnen',
+                en: 'open',
+                ru: 'открыть'
+              }
+            }
+        
+            
+            const btnText = text.open[language]
+        
+            // Формируем сообщение для отправки в Telegram
+            const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
+        
+            // Отправляем сообщение через Telegram Bot API
+            const telegramResponse = await axios.post(
+              `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+              {
+                chat_id: order.tlgid,
+                text: message,
+                parse_mode: 'HTML',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: btnText,
+                        web_app: {
+                          url: process.env.FRONTEND_URL
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            );
+        
+            console.log('[Telegram] Message sent successfully:', telegramResponse.data);
+
+
+      }
+        
+      }
+      
+     
+     
+     
+      //  для неоплаченных
+      // 4) В переменную delta записать количество дней, сколько прошло с момента создания объекта в БД
+      const createdDate = new Date(order.createdAt);
+      const timeDifferenceToNotPayedOrders = todayDate.getTime() - createdDate.getTime();
+      const deltaNotPayed = Math.floor(timeDifferenceToNotPayedOrders / (1000 * 60 * 60 * 24)); 
+     
+      // сообщение юзеру, что завтра удалим заказ 
+      if (deltaNotPayed == 6 && order.payStatus == false ){
+
+        console.log(`Order: неоплаченный, Days since creation: ${deltaNotPayed}`);
+
+         const user = await UserModel.findOne(
+              { tlgid: order.tlgid }
           );
             
           if (!user) {
@@ -96,7 +179,7 @@ mongoose
             const telegramResponse = await axios.post(
               `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
               {
-                chat_id: cart.tlgid,
+                chat_id: order.tlgid,
                 text: message,
                 parse_mode: 'HTML',
                 reply_markup: {
@@ -118,12 +201,12 @@ mongoose
         
 
 
-
-      } else if ( delta >= 7) {
+      // удаляем order      
+      } else if ( deltaNotPayed >= 7) {
 
 
          const user = await UserModel.findOneAndUpdate(
-              { tlgid: cart.tlgid },
+              { tlgid: order.tlgid },
               { crmStatus: 0 }, 
               { new: true}
           );
@@ -221,12 +304,20 @@ mongoose
 
 
         await OrdersModel.deleteOne({
-          _id: cart._id
+          _id: order._id
         })
 
-        console.log(`Order ID: ${cart._id}, Days since creation: ${delta}`);
+        console.log(`Order ID: ${order._id}, Days since creation: ${deltaNotPayed}`);
         console.log('order deleted')
-      } else {
+      } 
+      
+
+
+
+      
+      
+      
+      else {
         console.log('no orders to delete')
       }
 
