@@ -169,7 +169,7 @@ app.post(
           const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
             'Content-Type': 'application/json' });
 
-          console.log('отправить обновления в JB')
+          console.log('отправить обновления в JB 7')
           console.log('response 1', response1.status , response1.statusText)
           console.log('response 2', response2.status , response2.statusText)
           console.log('response 3', response3.status , response3.statusText)
