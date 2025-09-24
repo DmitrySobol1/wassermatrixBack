@@ -104,7 +104,12 @@ app.post(
             );
 
 
+
+            console.log('updatedOrder=',updatedOrder)
+
             const jbid = updatedOrder.jbid 
+
+            console.log('jbid=',jbid)
 
 
             // отправить запрос в JB для создания тегов для дожима и рассылок
