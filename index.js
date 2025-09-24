@@ -5694,7 +5694,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
     console.log('get from jb | tlgid=',tlgid, ' orderid=',orderid, ' answer=',answer)
 
     // Валидация
-    if (!tlgid || orderid === undefined || orderid === null || !answer ) {
+    if (!tlgid || !orderid || !answer ) {
       return res.status(400).json({
         status: 'error',
         error: 'tlgid, orderid and answer are required'
