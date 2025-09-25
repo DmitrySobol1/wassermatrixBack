@@ -5820,6 +5820,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
           );
 
             jbid = resUser.jbid
+            console.log('TEEEEEEEEEEEEEEEEEEEEEEEEEEEEST')
             console.log('jbid from user changes=',  jbid)
 
              console.log('Обновил юзера успешно:', resUser);  
