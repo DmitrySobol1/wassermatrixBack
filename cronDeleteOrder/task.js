@@ -141,26 +141,21 @@ export async function executeCheckTask() {
               ru: 'Вы получили заказ❓',
             },
             subtitle: {
-              de: 'bitte klicken Sie unten auf die entsprechende Schaltfläche',
-              en: 'please click the appropriate button below',
-              ru: 'нажмите, пожалуйста, соответствующую кнопку ниже',
+              de: 'Markieren Sie die Bestellung in der App als erhalten. Gehen Sie zu «Konto» – «Meine Bestellungen»',
+              en: 'Mark the order as received in the app. Go to «Account» - «My Orders»',
+              ru: 'Отметьте в приложении, если заказ получен. Раздел «Кабинет» - «Мои заказы»',
             },
 
-            yesBtn: {
-              de: '✅ ja',
-              en: '✅ yes',
-              ru: '✅ да',
+            open: {
+              de: 'öffnen',
+              en: 'open',
+              ru: 'открыть',
             },
 
-            noBtn: {
-              de: '🚫 nein',
-              en: '🚫 no',
-              ru: '🚫 нет',
-            },
+           
           };
 
-          const yesBtnText = text.yesBtn[language];
-          const noBtnText = text.noBtn[language];
+          const btnText = text.open[language];
 
           // Формируем сообщение для отправки в Telegram
           const message = `${text.title[language]}\n\n${text.subtitle[language]}`;
@@ -174,14 +169,12 @@ export async function executeCheckTask() {
               parse_mode: 'HTML',
               reply_markup: {
                 inline_keyboard: [
-                  [
+                 [
                     {
-                      text: yesBtnText,
-                      callback_data: `y_${order._id}`,
-                    },
-                    {
-                      text: noBtnText,
-                      callback_data: `n_${order._id}`,
+                      text: btnText,
+                      web_app: {
+                        url: process.env.FRONTEND_URL,
+                      },
                     },
                   ],
                 ],
@@ -194,39 +187,7 @@ export async function executeCheckTask() {
             telegramResponse.data
           );
 
-          const msgid = telegramResponse.data.result.message_id;
-          const jbid = order.jbid;
-
-          const jbtoken = process.env.JB_TOKEN;
-          const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
-
-          const bodyUpdateVar = {
-            api_token: jbtoken,
-            contact_id: jbid,
-            name: 'msgid',
-            value: `${msgid}`,
-          };
-
-          const safeRequest = async (url, body, headers) => {
-            try {
-              return await axios.post(url, body, { headers });
-            } catch (error) {
-              console.error('Request failed:', error.message);
-              return null;
-            }
-          };
-
-          const response = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-            'Content-Type': 'application/json',
-          });
-
-          if (response && response.status === 200) {
-            console.log('данные в JB отправлены успешно');
-          } else {
-            console.error('Ошибка отправки данных в JB');
-          }
-
-          // console.log('данные в JB отправлены')
+         
         }  
         
         // если юзер не нажал да/нет в сообщении о доставке
@@ -238,13 +199,7 @@ export async function executeCheckTask() {
             
             );
             
-            // await OrdersModel.findOneAndUpdate(
-            //   { _id: order._id },
-            //   { orderStatus: '689b8af622baabcbb7047b9e' }
-            
-            // );
-
-            console.log('пользователь не нажал да-нет, поменял isWaitingAdminAction=TRUE ')
+            console.log('пользователь не выбрал, что получил заказ, поменял isWaitingAdminAction=TRUE ')
 
         }
         

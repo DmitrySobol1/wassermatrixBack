@@ -5790,24 +5790,19 @@ app.post('/api/change_crmstatus', async (req, res) => {
 // изменить инфо в Order (из JB)
 app.post('/api/change_orderInfo', async (req, res) => {
   try {
-    const { tlgid, orderid, answer } = req.body;
+    const { tlgid, orderid } = req.body;
 
-    console.log('get from jb | tlgid=',tlgid, ' orderid=',orderid, ' answer=',answer)
+    console.log('get from app | tlgid=',tlgid, ' orderid=',orderid)
 
     // Валидация
-    if (!tlgid || !orderid || !answer ) {
+    if (!tlgid || !orderid ) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid, orderid and answer are required'
+        error: 'tlgid and orderid are required'
       });
     }
 
-          
-          let jbid 
-          let answerToSet = false
-          
-          if (answer == 'yes') {
-            answerToSet = true
+          let jbid
 
             try {
             const resUser = await UserModel.findOneAndUpdate(
@@ -5820,7 +5815,6 @@ app.post('/api/change_orderInfo', async (req, res) => {
           );
 
             jbid = resUser.jbid
-            console.log('TEEEEEEEEEEEEEEEEEEEEEEEEEEEEST')
             console.log('jbid from user changes=',  jbid)
 
              console.log('Обновил юзера успешно:', resUser);  
@@ -5832,7 +5826,9 @@ app.post('/api/change_orderInfo', async (req, res) => {
               const resOrder = await
               OrdersModel.findOneAndUpdate(
                 {_id: orderid},
-                { orderStatus: '689b8af622baabcbb7047b9e' },      
+                { orderStatus: '689b8af622baabcbb7047b9e',
+                  isUserConfirmDelivery: true
+                 },      
                 { new: true }
               );
 
@@ -5855,19 +5851,18 @@ app.post('/api/change_orderInfo', async (req, res) => {
               name: "thanksMailing"
             }
   
-    
             const bodyUpdateVar = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "hui",
-              value: "111"
+              name: "context",
+              value: "series5_message1"
             }
 
             const bodyUpdateVar2 = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "hui2",
-              value: "222"
+              name: "crmStatus",
+              value: "6"
             }
 
     
@@ -5917,29 +5912,13 @@ app.post('/api/change_orderInfo', async (req, res) => {
           }
 
 
-          }
-
-
-          if (answer == 'no') {
-
-            await UserModel.findOneAndUpdate(
-            { tlgid: tlgid }, 
-            {
-              isWaitingAdminAction: true
-            },
-            { new: true } 
-          );
-
-          }
-         
-
-           await OrdersModel.findOneAndUpdate(
-            { _id: orderid }, 
-            {
-              isUserConfirmDelivery: answerToSet
-            },
-            { new: true } 
-          );
+          //  await OrdersModel.findOneAndUpdate(
+          //   { _id: orderid }, 
+          //   {
+          //     isUserConfirmDelivery: answerToSet
+          //   },
+          //   { new: true } 
+          // );
 
     res.status(200).json({
       status: 'changed',
