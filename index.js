@@ -5894,7 +5894,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
             'Content-Type': 'application/json' });
           await delay(500);
           
-          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
             'Content-Type': 'application/json' });
 
 
