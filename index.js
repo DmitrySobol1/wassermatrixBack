@@ -5660,18 +5660,51 @@ app.post('/api/admin_update_waiting_status', async (req, res) => {
   }
 });
 
+// получить заказы пользователя по tlgid (из админки)
+app.get('/api/admin_get_user_orders/:tlgid', async (req, res) => {
+  try {
+    const { tlgid } = req.params;
+
+    console.log('admin_get_user_orders | tlgid=', tlgid);
+
+    // Валидация
+    if (!tlgid) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'tlgid is required'
+      });
+    }
+
+    // Находим заказы пользователя и популируем orderStatus
+    const orders = await OrdersModel.find({ tlgid: tlgid })
+      .populate('orderStatus')
+      .sort({ createdAt: -1 }); // Сортируем по дате создания, новые первые
+
+    res.status(200).json({
+      status: 'ok',
+      orders: orders
+    });
+  } catch (error) {
+    console.error('Ошибка при получении заказов пользователя', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при получении заказов'
+    });
+  }
+});
+
 // переместить пользователя на следующий этап CRM (из админки)
 app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
   try {
-    const { userId, newCrmStatus, isWaitingAdminAction } = req.body;
+    const { userId, newCrmStatus, isWaitingAdminAction, order } = req.body;
 
-    console.log('admin_move_user_to_next_stage | userId=', userId, ' newCrmStatus=', newCrmStatus, ' isWaitingAdminAction=', isWaitingAdminAction);
+    console.log('admin_move_user_to_next_stage 6 | userId=', userId, ' order=', order );
 
     // Валидация
-    if (!userId || newCrmStatus === undefined || newCrmStatus === null || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+    if (!userId || !order  || newCrmStatus === undefined || newCrmStatus === null || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
       return res.status(400).json({
         status: 'error',
-        error: 'userId, newCrmStatus and isWaitingAdminAction are required'
+        error: 'userId, order, newCrmStatus and isWaitingAdminAction are required'
       });
     }
 
@@ -5688,6 +5721,19 @@ app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
       return res.status(404).json({
         status: 'error',
         error: 'User not found'
+      });
+    }
+
+    const updatedOrder = await OrdersModel.findByIdAndUpdate(
+      {_id: order},
+      { orderStatus: '689b8af622baabcbb7047b9e' },
+      { new: true }
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'Order not found'
       });
     }
 
@@ -5769,6 +5815,12 @@ app.post('/api/change_orderInfo', async (req, res) => {
               crmStatus: 6
             },
             { new: true } 
+          );
+
+          await OrdersModel.findByIdAndUpdate(
+            {_id: orderid},
+            { orderStatus: '689b8af622baabcbb7047b9e' },
+            { new: true }
           );
 
           }

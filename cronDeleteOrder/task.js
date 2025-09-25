@@ -238,11 +238,11 @@ export async function executeCheckTask() {
             
             );
             
-            await OrdersModel.findOneAndUpdate(
-              { _id: order._id },
-              { orderStatus: '689b8af622baabcbb7047b9e' }
+            // await OrdersModel.findOneAndUpdate(
+            //   { _id: order._id },
+            //   { orderStatus: '689b8af622baabcbb7047b9e' }
             
-            );
+            // );
 
             console.log('пользователь не нажал да-нет, поменял isWaitingAdminAction=TRUE ')
 
