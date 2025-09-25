@@ -199,6 +199,9 @@ export async function executeCheckTask() {
             
             );
             
+            
+
+
             console.log('пользователь не выбрал, что получил заказ, поменял isWaitingAdminAction=TRUE ')
 
         }
