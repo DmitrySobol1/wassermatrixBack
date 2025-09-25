@@ -5859,15 +5859,15 @@ app.post('/api/change_orderInfo', async (req, res) => {
             const bodyUpdateVar = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "context",
-              value: "series5_message111"
+              name: "hui",
+              value: "111"
             }
 
             const bodyUpdateVar2 = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "context",
-              value: "series5_message222"
+              name: "hui2",
+              value: "222"
             }
 
     
@@ -5888,11 +5888,11 @@ app.post('/api/change_orderInfo', async (req, res) => {
 
           const response1 = await safeRequest(jburlSetTag, bodySetTag, {
             'Content-Type': 'application/json' });
-          await delay(500);
+          await delay(1000);
 
           const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
             'Content-Type': 'application/json' });
-          await delay(500);
+          await delay(1000);
           
           const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
             'Content-Type': 'application/json' });
