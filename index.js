@@ -5860,11 +5860,16 @@ app.post('/api/change_orderInfo', async (req, res) => {
               api_token: jbtoken,
               contact_id: jbid,
               name: "context",
-              value: "series5_message1"
+              value: "series5_message111"
             }
 
-            console.log('bodyUpdateVar', bodyUpdateVar)
-    
+            const bodyUpdateVar2 = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "context",
+              value: "series5_message222"
+            }
+
     
 
             const safeRequest = async (url, body, headers) => {      
@@ -5888,6 +5893,9 @@ app.post('/api/change_orderInfo', async (req, res) => {
           const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
             'Content-Type': 'application/json' });
           await delay(500);
+          
+          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+            'Content-Type': 'application/json' });
 
 
           if (response1 && response1.status >= 200 && response1.status < 300 ) {
@@ -5900,6 +5908,12 @@ app.post('/api/change_orderInfo', async (req, res) => {
                     console.log('response 2: данные в JB отправлены успешно');
           } else {
                     console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
           }
 
 
