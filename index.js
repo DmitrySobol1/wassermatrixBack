@@ -5812,16 +5812,23 @@ app.post('/api/change_orderInfo', async (req, res) => {
             await UserModel.findOneAndUpdate(
             { tlgid: tlgid }, 
             {
-              crmStatus: 6
+              crmStatus: 6,
+              isWaitingAdminAction: false
             },
             { new: true } 
           );
 
-          const resOrder = await OrdersModel.findOneAndUpdate(
-            {_id: orderid},
-            { orderStatus: '689b8af622baabcbb7047b9e' },
-            { new: true }
-          );
+          const resOrder = await
+            OrdersModel.findOneAndUpdate(
+              {_id: new mongoose.Types.ObjectId(orderid)},        
+              { orderStatus: '689b8af622baabcbb7047b9e' },        
+              { new: true }
+            );
+
+           if (!resOrder) {
+            console.error('Заказ не найден с ID:', orderid);    
+            return;
+          } 
 
           console.log('updated order=',resOrder )
 
