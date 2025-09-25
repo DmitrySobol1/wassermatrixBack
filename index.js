@@ -2190,7 +2190,7 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
       };
 
       //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
-  // м.б. далее снизить до 500мс iso 1000мс
+      // м.б. далее снизить до 500мс iso 1000мс
 
       const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -5712,7 +5712,14 @@ app.post('/api/change_orderInfo', async (req, res) => {
       });
     }
 
-          await UserModel.findOneAndUpdate(
+          
+
+          let answerToSet = false
+          
+          if (answer == 'yes') {
+            answerToSet = true
+
+            await UserModel.findOneAndUpdate(
             { tlgid: tlgid }, 
             {
               crmStatus: 6
@@ -5720,10 +5727,22 @@ app.post('/api/change_orderInfo', async (req, res) => {
             { new: true } 
           );
 
-          let answerToSet = false
-          if (answer == 'yes') {
-            answerToSet = true
           }
+
+
+          if (answer == 'no') {
+
+            await UserModel.findOneAndUpdate(
+            { tlgid: tlgid }, 
+            {
+              isWaitingAdminAction: true
+            },
+            { new: true } 
+          );
+
+          }
+
+         
 
            await OrdersModel.findOneAndUpdate(
             { _id: orderid }, 
