@@ -5820,6 +5820,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
           );
 
             jbid = resUser.jbid
+            console.log('jbid from user changes=',  jbid)
 
              console.log('Обновил юзера успешно:', resUser);  
           } catch(error) {
@@ -5840,7 +5841,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
             }
 
 
-            
+            console.log('jbid from before send to api jb=',  jbid)  
 
             // отправить данные в JB
             const jbtoken = process.env.JB_TOKEN
