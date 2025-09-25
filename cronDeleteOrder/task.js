@@ -121,7 +121,7 @@ export async function executeCheckTask() {
           );
         }
         // сообщение, получили ли посылку?
-        else if (deltaPayed == -2 && order.payStatus == true) {
+        else if (deltaPayed == -2 && order.payStatus == true && isUserConfirmDelivery == null) {
           console.log(
             `Order: Оплаченный, после доставки прошло: ${deltaPayed} д.`
           );
