@@ -5809,7 +5809,8 @@ app.post('/api/change_orderInfo', async (req, res) => {
           if (answer == 'yes') {
             answerToSet = true
 
-            await UserModel.findOneAndUpdate(
+            try {
+            const resUser = await UserModel.findOneAndUpdate(
             { tlgid: tlgid }, 
             {
               crmStatus: 6,
@@ -5817,20 +5818,24 @@ app.post('/api/change_orderInfo', async (req, res) => {
             },
             { new: true } 
           );
+             console.log('Обновил юзера успешно:', resUser);  
+          } catch(error) {
+            console.error('Ошибка обновления юзера:', error);
+          }
 
-          const resOrder = await
+          try {
+              const resOrder = await
             OrdersModel.findOneAndUpdate(
-              {_id: new mongoose.Types.ObjectId(orderid)},        
-              { orderStatus: '689b8af622baabcbb7047b9e' },        
-              { new: true }
-            );
+                {_id: orderid},
+                { orderStatus: '689b8af622baabcbb7047b9e' },      
+                { new: true }
+              );
 
-           if (!resOrder) {
-            console.error('Заказ не найден с ID:', orderid);    
-            return;
-          } 
+              console.log('Обновлено order успешно:', resOrder);        
+            } catch (error) {
+              console.error('Ошибка обновления order:', error);
+            }
 
-          console.log('updated order=',resOrder )
 
           }
 
