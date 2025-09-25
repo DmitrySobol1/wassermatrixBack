@@ -5817,11 +5817,13 @@ app.post('/api/change_orderInfo', async (req, res) => {
             { new: true } 
           );
 
-          await OrdersModel.findByIdAndUpdate(
+          const resOrder = await OrdersModel.findOneAndUpdate(
             {_id: orderid},
             { orderStatus: '689b8af622baabcbb7047b9e' },
             { new: true }
           );
+
+          console.log('updated order=',resOrder )
 
           }
 
@@ -5837,7 +5839,6 @@ app.post('/api/change_orderInfo', async (req, res) => {
           );
 
           }
-
          
 
            await OrdersModel.findOneAndUpdate(
