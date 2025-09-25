@@ -5803,7 +5803,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
     }
 
           
-
+          let jbid 
           let answerToSet = false
           
           if (answer == 'yes') {
@@ -5819,7 +5819,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
             { new: true } 
           );
 
-            const jbid = resUser.jbid
+            jbid = resUser.jbid
 
              console.log('Обновил юзера успешно:', resUser);  
           } catch(error) {
@@ -5850,7 +5850,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
             const bodySetTag = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "thanksMailing",
+              name: "thanksMailing"
             }
   
     
