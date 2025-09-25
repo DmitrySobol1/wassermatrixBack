@@ -5862,6 +5862,8 @@ app.post('/api/change_orderInfo', async (req, res) => {
               name: "context",
               value: "series5_message1"
             }
+
+            console.log('bodyUpdateVar', bodyUpdateVar)
     
     
 
