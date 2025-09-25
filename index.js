@@ -5660,6 +5660,50 @@ app.post('/api/admin_update_waiting_status', async (req, res) => {
   }
 });
 
+// переместить пользователя на следующий этап CRM (из админки)
+app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
+  try {
+    const { userId, newCrmStatus, isWaitingAdminAction } = req.body;
+
+    console.log('admin_move_user_to_next_stage | userId=', userId, ' newCrmStatus=', newCrmStatus, ' isWaitingAdminAction=', isWaitingAdminAction);
+
+    // Валидация
+    if (!userId || newCrmStatus === undefined || newCrmStatus === null || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+      return res.status(400).json({
+        status: 'error',
+        error: 'userId, newCrmStatus and isWaitingAdminAction are required'
+      });
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        crmStatus: newCrmStatus,
+        isWaitingAdminAction: isWaitingAdminAction
+      },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        status: 'error',
+        error: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      status: 'ok',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('Ошибка при перемещении пользователя на следующий этап', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка при изменении записи'
+    });
+  }
+});
+
 // изменить статус crmStatus (из JB)
 app.post('/api/change_crmstatus', async (req, res) => {
   try {

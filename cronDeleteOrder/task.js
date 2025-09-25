@@ -120,7 +120,7 @@ export async function executeCheckTask() {
             telegramResponse.data
           );
         }
-        // сообщение, получили ли посылку?
+        // сообщение, получили ли посылку? (через 2 дня после ETA)
         else if (deltaPayed == -2 && order.payStatus == true && order.isUserConfirmDelivery == null) {
           console.log(
             `Order: Оплаченный, после доставки прошло: ${deltaPayed} д.`
@@ -227,7 +227,24 @@ export async function executeCheckTask() {
           }
 
           // console.log('данные в JB отправлены')
-        } else {
+        }  
+        
+        // если юзер не нажал да/нет в сообщении о доставке
+        else if (deltaPayed == -3 && order.payStatus == true && order.isUserConfirmDelivery == null) {
+
+            await UserModel.findOneAndUpdate(
+              { tlgid: order.tlgid },
+              { isWaitingAdminAction: true }
+            
+            );
+
+            console.log('пользователь не нажал да-нет, поменял isWaitingAdminAction=TRUE ')
+
+        }
+        
+        
+        
+        else {
           console.log('no action with payed orders');
         }
       }
