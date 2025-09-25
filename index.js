@@ -5818,6 +5818,9 @@ app.post('/api/change_orderInfo', async (req, res) => {
             },
             { new: true } 
           );
+
+            const jbid = resUser.jbid
+
              console.log('Обновил юзера успешно:', resUser);  
           } catch(error) {
             console.error('Ошибка обновления юзера:', error);
@@ -5825,7 +5828,7 @@ app.post('/api/change_orderInfo', async (req, res) => {
 
           try {
               const resOrder = await
-            OrdersModel.findOneAndUpdate(
+              OrdersModel.findOneAndUpdate(
                 {_id: orderid},
                 { orderStatus: '689b8af622baabcbb7047b9e' },      
                 { new: true }
@@ -5835,6 +5838,65 @@ app.post('/api/change_orderInfo', async (req, res) => {
             } catch (error) {
               console.error('Ошибка обновления order:', error);
             }
+
+
+            
+
+            // отправить данные в JB
+            const jbtoken = process.env.JB_TOKEN
+            const jburlSetTag = process.env.JB_URL_SET_TAG
+            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+
+            const bodySetTag = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "thanksMailing",
+            }
+  
+    
+            const bodyUpdateVar = {
+              api_token: jbtoken,
+              contact_id: jbid,
+              name: "context",
+              value: "series5_message1"
+            }
+    
+    
+
+            const safeRequest = async (url, body, headers) => {      
+            try {
+              return await axios.post(url, body, { headers });     
+            } catch (error) {
+              console.error('Request failed:', error.message);     
+              return null;
+            }
+          };
+
+
+        //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+          const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+          const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+            'Content-Type': 'application/json' });
+          await delay(500);
+
+          const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+            'Content-Type': 'application/json' });
+          await delay(500);
+
+
+          if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
 
 
           }
