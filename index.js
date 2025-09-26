@@ -6167,6 +6167,62 @@ app.post('/api/change_waitadmin', async (req, res) => {
 });
 
 
+
+// изменить статус crmStatus (из JB)
+app.get('/api/get_qty_atbot', async (req, res) => {
+  try {
+    
+            // отправить данные в JB
+            const jbtoken = process.env.JB_TOKEN
+            const jbGetContacts = process.env.JB_GET_CONTACTS
+            const jbBotId = process.env.JB_BOTID
+            
+
+            const body = {
+              api_token: jbtoken,
+              bot_id: jbBotId
+            }
+  
+
+            const safeRequest = async (url, body, headers) => {      
+            try {
+              return await axios.post(url, body, { headers });     
+            } catch (error) {
+              console.error('Request failed:', error.message);     
+              return null;
+            }
+          };
+
+
+          const response = await safeRequest(jbGetContacts, body, {
+            'Content-Type': 'application/json' });
+
+          let qty = 0  
+
+          if (response && response.status >= 200 && response.status < 300 ) {
+                    console.log('response : данные из JB успешно получены');
+                    qty = response.data.meta.total
+                    console.log('qty=',qty)
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+     
+
+    res.status(200).json({
+      status: 'ok',
+      qty : qty
+    });
+  } catch (error) {
+    console.error('Ошибка в get_qty_atbot', error);
+    res.status(400).json({
+      status: 'error',
+      error: 'Ошибка в get_qty_atbot'
+    });
+  }
+});
+
+
 /////////////////////
 
 app.listen(PORT, (err) => {
