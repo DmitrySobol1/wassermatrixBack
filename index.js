@@ -265,17 +265,10 @@ app.post(
             // списываем кешбек, если пользователь применил списание
             if (updatedOrder.typeLoyaltySystem == 'writeOffCashback') {
 
-              // const cashbackValute = updatedOrder.cashbackValute
-              // const shouldBeCashbacked = updatedOrder.shouldBeCashbacked
+             
 
               console.log('списание всего кешбека')
-              // console.log('баллы:',shouldBeCashbacked, ' валюта юзера:',cashbackValute )
 
-              // const exchangeRates = await currencyConverter();
-              // // const convertedCashback = Number((shouldBeCashbacked / exchangeRates[cashbackValute]).toFixed(2))
-              // const convertedCashback = Math.round((shouldBeCashbacked / exchangeRates[cashbackValute]) * 100) / 100
-
-              // console.log('конвертированные баллы:',convertedCashback, ' евро:' )
               
               const updatedUser = await UserModel.findOneAndUpdate(
             { tlgid: updatedOrder.tlgid }, // условие поиска
@@ -327,6 +320,72 @@ app.post(
 
               if (updatedReferer) {
                 console.log(`Успешно начислено ${ballToAdd} баллов рефереру ${referer}. Новый баланс: ${updatedReferer.cashbackBall}`);
+
+               
+                
+              const languageReferer = updatedReferer.language
+
+    const text = {
+      title : {
+        de: '🔥 Wir haben Ihnen Cashback-Punkte für den Kauf Ihres Referrals gutgeschrieben',
+        en: '🔥 We have credited you with cashback points for your referral`s purchase',
+        ru: '🔥 Мы начислили вам кешбэк баллы за покупку вашего реферала'
+      },
+      subtitle: {
+        de: 'Sie können Ihre gesammelten Punkte in der App überprüfen: Abschnitt «Konto» – «Cashback»',
+        en: 'You can check your accumulated points in the app: section «Account» - «Cashback»',
+        ru: 'Вы можете посмотреть количество накопленных баллов в приложении: раздел «Кабинет» - «Кешбэк»'
+      },
+      info: {
+        de: 'Cashback-Punkte können bei der Bezahlung von Bestellungen verwendet werden',
+        en: 'Cashback points can be used when paying for orders',
+        ru: 'Кэшбек баллы можно использовать при оплате заказов',
+      },
+      
+      open: {
+        de: 'öffnen',
+        en: 'open',
+        ru: 'открыть'
+      }
+    }
+
+
+    const btnText = text.open[languageReferer]
+
+    // Формируем сообщение для отправки в Telegram
+    const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
+
+    // Отправляем сообщение через Telegram Bot API
+    const telegramResponse = await axios.post(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+      {
+        chat_id: referer,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: btnText,
+                web_app: {
+                  url: process.env.FRONTEND_URL
+                }
+              }
+            ]
+          ]
+        }
+      }
+    );
+                
+
+    console.log('сообщение отправлено рефереру', referer)
+
+
+
+
+
+
+
               } else {
                 console.log(`Не удалось найти реферера с tlgid: ${referer}`);
               }
