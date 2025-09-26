@@ -324,6 +324,7 @@ app.post(
                
                 
               const languageReferer = updatedReferer.language
+              console.log('REFERER LANGUAGE=', languageReferer )
 
     const text = {
       title : {
@@ -351,9 +352,13 @@ app.post(
 
 
     const btnText = text.open[languageReferer]
+    console.log('btnText=', btnText )
+
 
     // Формируем сообщение для отправки в Telegram
     const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
+    console.log('message=', message )
+
 
     // Отправляем сообщение через Telegram Bot API
     const telegramResponse = await axios.post(
@@ -377,8 +382,11 @@ app.post(
       }
     );
                 
-
+    console.log('telegramResponse', telegramResponse)
+    
+    
     console.log('сообщение отправлено рефереру', referer)
+
 
 
 
