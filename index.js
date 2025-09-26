@@ -20,7 +20,6 @@ import ReferalsModel from './models/referals.js';
 import ReferalsPromoForQuantityModel from './models/referals_promoForQuantity.js';
 import ReferalsPromoForPurchaseModel from './models/referals_promoForPurchase.js';
 
-
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
 
@@ -31,7 +30,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 dotenv.config();
 
-import axios from 'axios'; 
+import axios from 'axios';
 import https from 'https';
 
 const PORT = process.env.PORT || 4444;
@@ -82,138 +81,159 @@ app.post(
           const updatedOrder = await OrdersModel.findOneAndUpdate(
             { stripeSessionId: session.id }, // условие поиска
             {
-              payStatus: true, 
-              payment_intent: session.payment_intent, 
+              payStatus: true,
+              payment_intent: session.payment_intent,
             },
-            { new: true } 
+            { new: true }
           );
 
           // Отправляем сообщение всем админам о новом оплаченном заказе
           try {
-            const notificationMessage = `New order paid!\n\nOrder ID: ${updatedOrder._id}\nTotal items: ${updatedOrder.goods?.length || 0}`;
-            const notificationResult = await sendTlgMessageToAdmins(notificationMessage);
-            console.log('Результат отправки уведомлений админам:', notificationResult);
+            const notificationMessage = `New order paid!\n\nOrder ID: ${
+              updatedOrder._id
+            }\nTotal items: ${updatedOrder.goods?.length || 0}`;
+            const notificationResult = await sendTlgMessageToAdmins(
+              notificationMessage
+            );
+            console.log(
+              'Результат отправки уведомлений админам:',
+              notificationResult
+            );
           } catch (notificationError) {
-            console.error('Ошибка при отправке уведомления админам:', notificationError);
+            console.error(
+              'Ошибка при отправке уведомления админам:',
+              notificationError
+            );
           }
-
 
           if (updatedOrder) {
             console.log(
               `Order ${updatedOrder._id} payment status updated to true`
             );
 
+            console.log('updatedOrder=', updatedOrder);
 
+            const jbid = updatedOrder.jbid;
 
-            console.log('updatedOrder=',updatedOrder)
-
-            const jbid = updatedOrder.jbid 
-
-            console.log('jbid=',jbid)
-
+            console.log('jbid=', jbid);
 
             // отправить запрос в JB для создания тегов для дожима и рассылок
-            const jbtoken = process.env.JB_TOKEN
-            const jburlSetTag = process.env.JB_URL_SET_TAG
-            const jburlDelTag = process.env.JB_URL_DEL_TAG
-            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+            const jbtoken = process.env.JB_TOKEN;
+            const jburlSetTag = process.env.JB_URL_SET_TAG;
+            const jburlDelTag = process.env.JB_URL_DEL_TAG;
+            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
             const bodySetTag = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "purchaseDone",
-            }
-            
+              name: 'purchaseDone',
+            };
+
             const bodyDelTag = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "startPayingButNotPayed",
-            }
-            
-            
+              name: 'startPayingButNotPayed',
+            };
+
             const bodyUpdateVar = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "context",
-              value: "waitingForDelivery"
-            }
-            
+              name: 'context',
+              value: 'waitingForDelivery',
+            };
+
             const bodyUpdateVar2 = {
               api_token: jbtoken,
               contact_id: jbid,
-              name: "crmStatus",
-              value: "4"
+              name: 'crmStatus',
+              value: '4',
+            };
+
+            const safeRequest = async (url, body, headers) => {
+              try {
+                return await axios.post(url, body, { headers });
+              } catch (error) {
+                console.error('Request failed:', error.message);
+                return null;
+              }
+            };
+
+            //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+            const delay = (ms) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
+
+            const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+              'Content-Type': 'application/json',
+            });
+            await delay(500);
+
+            const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+              'Content-Type': 'application/json',
+            });
+            await delay(500);
+
+            const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+              'Content-Type': 'application/json',
+            });
+            await delay(500);
+
+            const response4 = await safeRequest(
+              jburlUpdateVar,
+              bodyUpdateVar2,
+              {
+                'Content-Type': 'application/json',
+              }
+            );
+
+            if (
+              response1 &&
+              response1.status >= 200 &&
+              response1.status < 300
+            ) {
+              console.log('response 1: данные в JB отправлены успешно');
+            } else {
+              console.error('response 1: ошибка отправки данных в JB');
             }
 
-
-            const safeRequest = async (url, body, headers) => {      
-            try {
-              return await axios.post(url, body, { headers });     
-            } catch (error) {
-              console.error('Request failed:', error.message);     
-              return null;
+            if (
+              response2 &&
+              response2.status >= 200 &&
+              response2.status < 300
+            ) {
+              console.log('response 2: данные в JB отправлены успешно');
+            } else {
+              console.error('response 2: ошибка отправки данных в JB');
             }
-          };
 
+            if (
+              response3 &&
+              response3.status >= 200 &&
+              response3.status < 300
+            ) {
+              console.log('response 3: данные в JB отправлены успешно');
+            } else {
+              console.error('response 3: ошибка отправки данных в JB');
+            }
 
-          //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+            if (
+              response4 &&
+              response4.status >= 200 &&
+              response4.status < 300
+            ) {
+              console.log('response 4: данные в JB отправлены успешно');
+            } else {
+              console.error('response 4: ошибка отправки данных в JB');
+            }
 
-          const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-          const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-            'Content-Type': 'application/json' });
-          await delay(500);
-
-          const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
-            'Content-Type': 'application/json' });
-          await delay(500);
-
-
-          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-            'Content-Type': 'application/json' });
-          await delay(500);
-
-          const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-            'Content-Type': 'application/json' });
-
-          
-            if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
-
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-         
-          if (response4 && response4.status >= 200 && response4.status < 300 ) {
-                    console.log('response 4: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 4: ошибка отправки данных в JB');
-          }
-          
-          
-          
-          await UserModel.findOneAndUpdate(
-            { tlgid: updatedOrder.tlgid },
-            {
-              crmStatus: 4,
-              isWaitingAdminAction: true
-            },
-            { new: true }
-          );
-
-
-
+            await UserModel.findOneAndUpdate(
+              { tlgid: updatedOrder.tlgid },
+              {
+                crmStatus: 4,
+                isWaitingAdminAction: true,
+              },
+              { new: true }
+            );
 
             // Обновляем quantityOfPurchases для каждого товара в заказе
             if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
@@ -224,223 +244,227 @@ app.post(
                     { $inc: { quantityOfPurchases: item.qty } },
                     { new: true }
                   );
-                  console.log(`Updated quantityOfPurchases for item ${item.itemId} by ${item.qty}`);
+                  console.log(
+                    `Updated quantityOfPurchases for item ${item.itemId} by ${item.qty}`
+                  );
                 } catch (itemError) {
-                  console.error(`Error updating quantityOfPurchases for item ${item.itemId}:`, itemError);
+                  console.error(
+                    `Error updating quantityOfPurchases for item ${item.itemId}:`,
+                    itemError
+                  );
                 }
               }
             }
 
             // добавляем баллы кешбека пользователю
             if (updatedOrder.typeLoyaltySystem == 'addCashback') {
+              const cashbackValute = updatedOrder.cashbackValute;
+              const shouldBeCashbacked = updatedOrder.shouldBeCashbacked;
 
-              const cashbackValute = updatedOrder.cashbackValute
-              const shouldBeCashbacked = updatedOrder.shouldBeCashbacked
-
-              console.log('добавление кешбека: ')
-              console.log('баллы:',shouldBeCashbacked, ' валюта юзера:',cashbackValute )
+              console.log('добавление кешбека: ');
+              console.log(
+                'баллы:',
+                shouldBeCashbacked,
+                ' валюта юзера:',
+                cashbackValute
+              );
 
               const exchangeRates = await currencyConverter();
               // const convertedCashback = Number((shouldBeCashbacked / exchangeRates[cashbackValute]).toFixed(2))
-              const convertedCashback = Math.round((shouldBeCashbacked / exchangeRates[cashbackValute]) * 100) / 100
+              const convertedCashback =
+                Math.round(
+                  (shouldBeCashbacked / exchangeRates[cashbackValute]) * 100
+                ) / 100;
 
-              console.log('конвертированные баллы:',convertedCashback, ' евро:' )
-              
+              console.log(
+                'конвертированные баллы:',
+                convertedCashback,
+                ' евро:'
+              );
+
               const updatedUser = await UserModel.findOneAndUpdate(
-            { tlgid: updatedOrder.tlgid }, // условие поиска
-            {
-              $inc: { cashbackBall: convertedCashback },
-                          
-            },
-            { new: true } 
-          );
-
-            updatedOrder.isCashbackOperationDone = 'cashback-added' 
-            await updatedOrder.save();
-
-            }
-
-
-            
-            // списываем кешбек, если пользователь применил списание
-            if (updatedOrder.typeLoyaltySystem == 'writeOffCashback') {
-
-             
-
-              console.log('списание всего кешбека')
-
-              
-              const updatedUser = await UserModel.findOneAndUpdate(
-            { tlgid: updatedOrder.tlgid }, // условие поиска
-            {
-               cashbackBall: 0 
-            },
-            { new: true } 
-          );
-
-            updatedOrder.isCashbackOperationDone = 'cashback-writtenOff' 
-            await updatedOrder.save();
-
-            }
-
-
-            //  начисляем кешбек рефереру, если покупка была совершена его рефералом
-             const findReferer = await ReferalsModel.findOne(
-            { son: updatedOrder.tlgid }, // условие поиска
-          );
-            
-          if (findReferer) {
-            const referer = findReferer.father
-            console.log('user have referer - начисляем', referer)
-
-            // найти в БД referals_promoForPurchase параметр sale и сохранить в const saleValue
-            const promoForPurchase = await ReferalsPromoForPurchaseModel.findOne();
-            const saleValue = promoForPurchase ? promoForPurchase.sale : 0;
-
-            if (saleValue > 0) {
-              // посчитать количество баллов (сохранить в const ballToAdd) - это сумма всех товаров в корзине в евро * saleValue
-              let totalSumInEuro = 0;
-              if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
-                for (const item of updatedOrder.goods) {
-                  if (item.actualPurchasePriceInEu && item.qty) {
-                    totalSumInEuro += item.actualPurchasePriceInEu * item.qty;
-                  }
-                }
-              }
-
-              const ballToAdd = totalSumInEuro * (saleValue/100);
-              console.log(`Начисляем рефереру ${referer}: ${ballToAdd} баллов (сумма заказа: ${totalSumInEuro} EUR, процент: ${saleValue})`);
-
-              // найти в БД users пользователя с tlgid = referer и в поле cashbackBall прибавить значение из ballToAdd
-              const updatedReferer = await UserModel.findOneAndUpdate(
-                { tlgid: referer },
-                { $inc: { cashbackBall: ballToAdd } },
+                { tlgid: updatedOrder.tlgid }, // условие поиска
+                {
+                  $inc: { cashbackBall: convertedCashback },
+                },
                 { new: true }
               );
 
-              if (updatedReferer) {
-                console.log(`Успешно начислено ${ballToAdd} баллов рефереру ${referer}. Новый баланс: ${updatedReferer.cashbackBall}`);
-
-               
-                
-              const languageReferer = updatedReferer.language
-              console.log('REFERER LANGUAGE=', languageReferer )
-
-    const text = {
-      title : {
-        de: '🔥 Wir haben Ihnen Cashback-Punkte für den Kauf Ihres Referrals gutgeschrieben',
-        en: '🔥 We have credited you with cashback points for your referral`s purchase',
-        ru: '🔥 Мы начислили вам кешбэк баллы за покупку вашего реферала'
-      },
-      subtitle: {
-        de: 'Sie können Ihre gesammelten Punkte in der App überprüfen: Abschnitt «Konto» – «Cashback»',
-        en: 'You can check your accumulated points in the app: section «Account» - «Cashback»',
-        ru: 'Вы можете посмотреть количество накопленных баллов в приложении: раздел «Кабинет» - «Кешбэк»'
-      },
-      info: {
-        de: 'Cashback-Punkte können bei der Bezahlung von Bestellungen verwendet werden',
-        en: 'Cashback points can be used when paying for orders',
-        ru: 'Кэшбек баллы можно использовать при оплате заказов',
-      },
-      
-      open: {
-        de: 'öffnen',
-        en: 'open',
-        ru: 'открыть'
-      }
-    }
-
-
-    const btnText = text.open[languageReferer]
-    console.log('btnText=', btnText )
-
-
-    // Формируем сообщение для отправки в Telegram
-    const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
-    console.log('message=', message )
-
-
-    // Отправляем сообщение через Telegram Bot API
-    const telegramResponse = await axios.post(
-      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
-      {
-        chat_id: referer,
-        text: message,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: btnText,
-                web_app: {
-                  url: process.env.FRONTEND_URL
-                }
-              }
-            ]
-          ]
-        }
-      }
-    );
-                
-    console.log('telegramResponse', telegramResponse)
-    
-    
-    console.log('сообщение отправлено рефереру', referer)
-
-
-
-
-
-
-
-
-              } else {
-                console.log(`Не удалось найти реферера с tlgid: ${referer}`);
-              }
-            } else {
-              console.log('Процент для начисления реферального кешбека не установлен или равен 0');
+              updatedOrder.isCashbackOperationDone = 'cashback-added';
+              await updatedOrder.save();
             }
 
-          } else {
-            console.log('user have NO referer - не начисляем кешбек рефереру')
-          }
+            // списываем кешбек, если пользователь применил списание
+            if (updatedOrder.typeLoyaltySystem == 'writeOffCashback') {
+              console.log('списание всего кешбека');
 
+              const updatedUser = await UserModel.findOneAndUpdate(
+                { tlgid: updatedOrder.tlgid }, // условие поиска
+                {
+                  cashbackBall: 0,
+                },
+                { new: true }
+              );
 
+              updatedOrder.isCashbackOperationDone = 'cashback-writtenOff';
+              await updatedOrder.save();
+            }
 
+            //  начисляем кешбек рефереру, если покупка была совершена его рефералом
+            const findReferer = await ReferalsModel.findOne(
+              { son: updatedOrder.tlgid } // условие поиска
+            );
 
+            if (findReferer) {
+              const referer = findReferer.father;
+              console.log('user have referer - начисляем', referer);
+
+              // найти в БД referals_promoForPurchase параметр sale и сохранить в const saleValue
+              const promoForPurchase =
+                await ReferalsPromoForPurchaseModel.findOne();
+              const saleValue = promoForPurchase ? promoForPurchase.sale : 0;
+
+              if (saleValue > 0) {
+                // посчитать количество баллов (сохранить в const ballToAdd) - это сумма всех товаров в корзине в евро * saleValue
+                let totalSumInEuro = 0;
+                if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
+                  for (const item of updatedOrder.goods) {
+                    if (item.actualPurchasePriceInEu && item.qty) {
+                      totalSumInEuro += item.actualPurchasePriceInEu * item.qty;
+                    }
+                  }
+                }
+
+                const ballToAdd = totalSumInEuro * (saleValue / 100);
+                console.log(
+                  `Начисляем рефереру ${referer}: ${ballToAdd} баллов (сумма заказа: ${totalSumInEuro} EUR, процент: ${saleValue})`
+                );
+
+                // найти в БД users пользователя с tlgid = referer и в поле cashbackBall прибавить значение из ballToAdd
+                const updatedReferer = await UserModel.findOneAndUpdate(
+                  { tlgid: referer },
+                  { $inc: { cashbackBall: ballToAdd } },
+                  { new: true }
+                );
+
+                if (updatedReferer) {
+                  console.log(
+                    `Успешно начислено ${ballToAdd} баллов рефереру ${referer}. Новый баланс: ${updatedReferer.cashbackBall}`
+                  );
+
+                  const languageReferer = updatedReferer.language;
+
+                  const text = {
+                    title: {
+                      de: '🔥 Wir haben Ihnen Cashback-Punkte für den Kauf Ihres Referrals gutgeschrieben',
+                      en: '🔥 We have credited you with cashback points for your referral`s purchase',
+                      ru: '🔥 Мы начислили вам кешбэк баллы за покупку вашего реферала',
+                    },
+                    subtitle: {
+                      de: 'Sie können Ihre gesammelten Punkte in der App überprüfen: Abschnitt «Konto» – «Cashback»',
+                      en: 'You can check your accumulated points in the app: section «Account» - «Cashback»',
+                      ru: 'Вы можете посмотреть количество накопленных баллов в приложении: раздел «Кабинет» - «Кешбэк»',
+                    },
+                    info: {
+                      de: 'Cashback-Punkte können bei der Bezahlung von Bestellungen verwendet werden',
+                      en: 'Cashback points can be used when paying for orders',
+                      ru: 'Кэшбек баллы можно использовать при оплате заказов',
+                    },
+
+                    open: {
+                      de: 'öffnen',
+                      en: 'open',
+                      ru: 'открыть',
+                    },
+                  };
+
+                  const btnText = text.open[languageReferer];
+
+                  // Формируем сообщение для отправки в Telegram
+                  const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
+
+                  // Отправляем сообщение через Telegram Bot API
+                  const telegramResponse = await axios.post(
+                    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+                    {
+                      chat_id: referer,
+                      text: message,
+                      parse_mode: 'HTML',
+                      reply_markup: {
+                        inline_keyboard: [
+                          [
+                            {
+                              text: btnText,
+                              web_app: {
+                                url: process.env.FRONTEND_URL,
+                              },
+                            },
+                          ],
+                        ],
+                      },
+                    }
+                  );
+
+                  console.log('сообщение отправлено рефереру', referer);
+                } else {
+                  console.log(`Не удалось найти реферера с tlgid: ${referer}`);
+                }
+              } else {
+                console.log(
+                  'Процент для начисления реферального кешбека не установлен или равен 0'
+                );
+              }
+            } else {
+              console.log(
+                'user have NO referer - не начисляем кешбек рефереру'
+              );
+            }
 
             // Отмечаем промокод как использованный, если он был применен
             if (updatedOrder.goods && Array.isArray(updatedOrder.goods)) {
               for (const item of updatedOrder.goods) {
                 try {
                   // Проверяем, был ли использован промокод для этого товара
-                  if (item.isPurchasedByPromocode === true && item.promocode && item.promocodeType) {
+                  if (
+                    item.isPurchasedByPromocode === true &&
+                    item.promocode &&
+                    item.promocodeType
+                  ) {
                     if (item.promocodeType === 'personal') {
                       // Для персональных промокодов - отмечаем как использованный и деактивируем
                       await PromocodesPersonalModel.findOneAndUpdate(
                         { code: item.promocode },
-                        { 
+                        {
                           isUsed: true,
-                          isActive: false
+                          isActive: false,
                         }
                       );
-                      console.log(`Personal promocode ${item.promocode} marked as used`);
+                      console.log(
+                        `Personal promocode ${item.promocode} marked as used`
+                      );
                     } else if (item.promocodeType === 'general') {
                       // Для общих промокодов - добавляем пользователя в массив tlgid
-                      const user = await UserModel.findOne({ tlgid: updatedOrder.tlgid });
+                      const user = await UserModel.findOne({
+                        tlgid: updatedOrder.tlgid,
+                      });
                       if (user) {
                         await PromocodesModel.findOneAndUpdate(
                           { code: item.promocode },
                           { $addToSet: { tlgid: user._id } }
                         );
-                        console.log(`User ${updatedOrder.tlgid} added to general promocode ${item.promocode} usage list`);
+                        console.log(
+                          `User ${updatedOrder.tlgid} added to general promocode ${item.promocode} usage list`
+                        );
                       }
                     }
                     // Прерываем цикл после первого найденного промокода
                     break;
                   }
                 } catch (promocodeError) {
-                  console.error(`Error updating promocode for item ${item.itemId}:`, promocodeError);
+                  console.error(
+                    `Error updating promocode for item ${item.itemId}:`,
+                    promocodeError
+                  );
                 }
               }
             }
@@ -463,21 +487,18 @@ app.post(
         try {
           // создаем новую запись в БД ReceiptsModel
           const receipt = new ReceiptsModel({
-              payment_intent: intent.payment_intent,
-              url: intent.receipt_url,
+            payment_intent: intent.payment_intent,
+            url: intent.receipt_url,
           });
 
           await receipt.save();
-
 
           if (receipt) {
             console.log(
               `New payment intent ${intent.payment_intent} created at DB`
             );
           } else {
-            console.log(
-              `someting went wrong`
-            );
+            console.log(`someting went wrong`);
           }
         } catch (error) {
           console.error('Error creating payment url:', error);
@@ -533,58 +554,67 @@ app.post('/api/enter', async (req, res) => {
   try {
     const user = await UserModel.findOne({ tlgid: req.body.tlgid });
 
-     console.log('jbid',req.body.jbid ) 
+    console.log('jbid', req.body.jbid);
 
     //создание юзера
     if (!user) {
       await createNewUser(req.body.tlgid, req.body.jbid, req.body.language);
-      const userData = { result: 'showOnboarding', language:req.body.language  };
+      const userData = {
+        result: 'showOnboarding',
+        language: req.body.language,
+      };
 
-      // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку 
+      // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку
       const resp = await ReferalsModel.findOneAndUpdate(
-        { son: req.body.tlgid,
-          isSonEnterToApp: false
-         },
+        { son: req.body.tlgid, isSonEnterToApp: false },
         { isSonEnterToApp: true },
         { new: true }
       );
 
       if (resp) {
+        const referer = resp.father;
 
-      const referer = resp.father
+        const qtyOfReferals = await ReferalsModel.countDocuments({
+          father: referer,
+          isSonEnterToApp: true,
+        });
 
-      const qtyOfReferals = await ReferalsModel.countDocuments({
-        father: referer,
-        isSonEnterToApp: true
-      });
+        const promoRecord = await ReferalsPromoForQuantityModel.findOne({
+          qty: qtyOfReferals,
+        });
 
-      const promoRecord = await ReferalsPromoForQuantityModel.findOne({
-        qty: qtyOfReferals
-      });
+        const saleForGeneratePromo = promoRecord ? promoRecord.sale : null;
 
-      const saleForGeneratePromo = promoRecord ? promoRecord.sale : null;
-
-      if (saleForGeneratePromo != null){
-        // запуск функции генерации личного промокода
-        console.log('запуск функции генерации личного промокода с %', saleForGeneratePromo)
-        const creatingPromo = await createPersonalPromoForReferals(referer, saleForGeneratePromo,qtyOfReferals)
-        console.log('creatingPromo', creatingPromo)
+        if (saleForGeneratePromo != null) {
+          // запуск функции генерации личного промокода
+          console.log(
+            'запуск функции генерации личного промокода с %',
+            saleForGeneratePromo
+          );
+          const creatingPromo = await createPersonalPromoForReferals(
+            referer,
+            saleForGeneratePromo,
+            qtyOfReferals
+          );
+          console.log('creatingPromo', creatingPromo);
+        }
       }
-    }
-
 
       return res.json({ userData });
     }
 
-
-
-    if (!user.jbid){
+    if (!user.jbid) {
       // Обновляем jbid для существующего пользователя
       await UserModel.updateOne(
         { tlgid: req.body.tlgid },
         { jbid: req.body.jbid }
       );
-      console.log('Updated jbid for existing user:', req.body.tlgid, 'with jbid:', req.body.jbid);
+      console.log(
+        'Updated jbid for existing user:',
+        req.body.tlgid,
+        'with jbid:',
+        req.body.jbid
+      );
     }
 
     // извлечь инфо о юзере из БД и передать на фронт действие
@@ -611,115 +641,109 @@ async function createNewUser(tlgid, jbid, lang) {
     await doc.save();
 
     // отправить запрос в JB для создания тегов для дожима и рассылок
-    const jbtoken = process.env.JB_TOKEN
-    const jburlSetTag = process.env.JB_URL_SET_TAG
-    const jburlDelTag = process.env.JB_URL_DEL_TAG
-    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+    const jbtoken = process.env.JB_TOKEN;
+    const jburlSetTag = process.env.JB_URL_SET_TAG;
+    const jburlDelTag = process.env.JB_URL_DEL_TAG;
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
     const bodySetTag = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "notAddGoodAtCart",
-    }
-    
+      name: 'notAddGoodAtCart',
+    };
+
     const bodyDelTag = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "openBot",
-    }
-    
+      name: 'openBot',
+    };
+
     const bodyDelTag2 = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "crmStatus0",
-    }
-    
+      name: 'crmStatus0',
+    };
+
     const bodyUpdateVar = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "context",
-      value: "series2_message1"
-    }
-    
+      name: 'context',
+      value: 'series2_message1',
+    };
+
     const bodyUpdateVar2 = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "crmStatus",
-      value: "1"
+      name: 'crmStatus',
+      value: '1',
+    };
+
+    const safeRequest = async (url, body, headers) => {
+      try {
+        return await axios.post(url, body, { headers });
+      } catch (error) {
+        console.error('Request failed:', error.message);
+        return null;
+      }
+    };
+
+    //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json',
+    });
+
+    if (response1 && response1.status >= 200 && response1.status < 300) {
+      console.log('response 1: данные в JB отправлены успешно');
+    } else {
+      console.error('response 1: ошибка отправки данных в JB');
     }
 
-
-    const safeRequest = async (url, body, headers) => {      
-    try {
-      return await axios.post(url, body, { headers });     
-    } catch (error) {
-      console.error('Request failed:', error.message);     
-      return null;
+    if (response2 && response2.status >= 200 && response2.status < 300) {
+      console.log('response 2: данные в JB отправлены успешно');
+    } else {
+      console.error('response 2: ошибка отправки данных в JB');
     }
-  };
 
+    if (response3 && response3.status >= 200 && response3.status < 300) {
+      console.log('response 3: данные в JB отправлены успешно');
+    } else {
+      console.error('response 3: ошибка отправки данных в JB');
+    }
 
-  //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+    if (response4 && response4.status >= 200 && response4.status < 300) {
+      console.log('response 4: данные в JB отправлены успешно');
+    } else {
+      console.error('response 4: ошибка отправки данных в JB');
+    }
 
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-    'Content-Type': 'application/json' });
-
-
-   if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
-
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-         
-          if (response4 && response4.status >= 200 && response4.status < 300 ) {
-                    console.log('response 4: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 4: ошибка отправки данных в JB');
-          }
-          
-          if (response5 && response5.status >= 200 && response5.status < 300 ) {
-                    console.log('response 5: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 5: ошибка отправки данных в JB');
-          }
-         
-          
-
-
-
-
-
-
+    if (response5 && response5.status >= 200 && response5.status < 300) {
+      console.log('response 5: данные в JB отправлены успешно');
+    } else {
+      console.error('response 5: ошибка отправки данных в JB');
+    }
   } catch (err) {
     console.log(err);
   }
@@ -755,7 +779,6 @@ app.post('/api/admin_add_new_good', upload.single('file'), async (req, res) => {
       delivery_price_inEu,
       delivery_price_outEu,
     } = req.body;
-
 
     console.log('[Database] Creating document record...');
     const document = new GoodsModel({
@@ -797,9 +820,6 @@ app.post('/api/admin_add_new_good', upload.single('file'), async (req, res) => {
   }
 });
 
-
-
-
 // создать новую акцию
 app.post('/api/admin_add_new_sale', upload.single('file'), async (req, res) => {
   console.log('[Request] Received upload request');
@@ -828,12 +848,11 @@ app.post('/api/admin_add_new_sale', upload.single('file'), async (req, res) => {
       buttonText_en,
       buttonText_ru,
       good,
-      isShowButton
+      isShowButton,
     } = req.body;
 
     // Если good не передан или пустой, устанавливаем null
     const goodValue = good && good.trim() !== '' ? good : null;
-
 
     console.log('[Database] Creating document record...');
     const document = new SaleModel({
@@ -909,7 +928,7 @@ app.get('/api/admin_get_promocodes', async (req, res) => {
   try {
     const { isActive } = req.query;
     let filter = {};
-    
+
     if (isActive === 'true') {
       filter.isActive = true;
     } else if (isActive === 'false') {
@@ -918,9 +937,16 @@ app.get('/api/admin_get_promocodes', async (req, res) => {
       // По умолчанию возвращаем только активные промокоды для обратной совместимости
       filter.isActive = true;
     }
-    
-    const promocodes = await PromocodesModel.find(filter).sort({ createdAt: -1 });
-    console.log('[Database] Promocodes fetched:', promocodes.length, 'with filter:', filter);
+
+    const promocodes = await PromocodesModel.find(filter).sort({
+      createdAt: -1,
+    });
+    console.log(
+      '[Database] Promocodes fetched:',
+      promocodes.length,
+      'with filter:',
+      filter
+    );
     res.json(promocodes);
   } catch (error) {
     console.error('[Error] Failed to fetch promocodes:', error);
@@ -936,7 +962,7 @@ app.get('/api/admin_get_personal_promocodes', async (req, res) => {
   try {
     const { isActive } = req.query;
     let filter = {};
-    
+
     if (isActive === 'true') {
       filter.isActive = true;
     } else if (isActive === 'false') {
@@ -945,11 +971,16 @@ app.get('/api/admin_get_personal_promocodes', async (req, res) => {
       // По умолчанию возвращаем только активные промокоды для обратной совместимости
       filter.isActive = true;
     }
-    
+
     const personalPromocodes = await PromocodesPersonalModel.find(filter)
       .populate('tlgid', 'tlgid name')
       .sort({ createdAt: -1 });
-    console.log('[Database] Personal promocodes fetched:', personalPromocodes.length, 'with filter:', filter);
+    console.log(
+      '[Database] Personal promocodes fetched:',
+      personalPromocodes.length,
+      'with filter:',
+      filter
+    );
     res.json(personalPromocodes);
   } catch (error) {
     console.error('[Error] Failed to fetch personal promocodes:', error);
@@ -965,22 +996,33 @@ app.get('/api/admin_get_personal_promocodes/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
-    console.log('[API] Fetching personal promocodes for user ObjectId:', userId);
+    console.log(
+      '[API] Fetching personal promocodes for user ObjectId:',
+      userId
+    );
 
     const personalPromocodes = await PromocodesPersonalModel.find({
-      tlgid: userId,  // В базе поле называется tlgid, но хранит ObjectId пользователя
-      isActive: true
+      tlgid: userId, // В базе поле называется tlgid, но хранит ObjectId пользователя
+      isActive: true,
     }).sort({ createdAt: -1 });
 
-    console.log('[Database] Personal promocodes found for userId', userId, ':', personalPromocodes.length);
+    console.log(
+      '[Database] Personal promocodes found for userId',
+      userId,
+      ':',
+      personalPromocodes.length
+    );
 
     res.json({
       status: 'ok',
       promocodes: personalPromocodes,
-      total: personalPromocodes.length
+      total: personalPromocodes.length,
     });
   } catch (error) {
-    console.error('[Error] Failed to fetch personal promocodes for user:', error);
+    console.error(
+      '[Error] Failed to fetch personal promocodes for user:',
+      error
+    );
     res.status(500).json({
       error: 'Server error',
       details: error.message,
@@ -996,7 +1038,7 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
     console.log('[API] Sending personal promocode to user:', {
       promocodeId,
       userId,
-      userTlgid
+      userTlgid,
     });
 
     // Получаем информацию о промокоде
@@ -1004,7 +1046,7 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
     if (!promocode) {
       return res.status(404).json({
         error: 'Promocode not found',
-        status: 'error'
+        status: 'error',
       });
     }
 
@@ -1015,26 +1057,26 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
       { isWaitingAdminAction: false },
       { new: true }
     );
-    
+
     if (!user) {
       return res.status(404).json({
         error: 'User not found',
-        status: 'error'
+        status: 'error',
       });
     }
-    
-    const language = user.language
+
+    const language = user.language;
 
     const text = {
-      title : {
-        de : '🎉 Ihr persönlicher Promo-Code!',
+      title: {
+        de: '🎉 Ihr persönlicher Promo-Code!',
         en: '🎉 Your personal promocode! ',
-        ru: '🎉 Ваш персональный промокод!'
+        ru: '🎉 Ваш персональный промокод!',
       },
       code: {
         de: 'Code: ',
         en: 'Code: ',
-        ru: 'Код: '
+        ru: 'Код: ',
       },
       sale: {
         de: 'Rabatt: ',
@@ -1044,22 +1086,25 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
       valid: {
         de: 'Gültig bis: ',
         en: 'Valid until: ',
-        ru: 'Действует до: '
+        ru: 'Действует до: ',
       },
       open: {
         de: 'öffnen',
         en: 'open',
-        ru: 'открыть'
+        ru: 'открыть',
+      },
+    };
+
+    const formattedDate = new Date(promocode.expiryDate).toLocaleDateString(
+      'ru-RU',
+      {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
       }
-    }
+    );
 
-    const formattedDate = new Date(promocode.expiryDate).toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    })
-
-    const btnText = text.open[language]
+    const btnText = text.open[language];
 
     // Формируем сообщение для отправки в Telegram
     const message = `${text.title[language]}\n\n${text.code[language]} <code>${promocode.code}</code>\n${text.sale[language]} -${promocode.saleInPercent}%\n${text.valid[language]} ${formattedDate}`;
@@ -1077,12 +1122,12 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
               {
                 text: btnText,
                 web_app: {
-                  url: process.env.FRONTEND_URL
-                }
-              }
-            ]
-          ]
-        }
+                  url: process.env.FRONTEND_URL,
+                },
+              },
+            ],
+          ],
+        },
       }
     );
 
@@ -1091,15 +1136,14 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
     res.json({
       status: 'ok',
       message: 'Promocode sent successfully',
-      telegramResponse: telegramResponse.data
+      telegramResponse: telegramResponse.data,
     });
-
   } catch (error) {
     console.error('[Error] Failed to send personal promocode:', error);
     res.status(500).json({
       error: 'Server error',
       details: error.message,
-      status: 'error'
+      status: 'error',
     });
   }
 });
@@ -1108,7 +1152,7 @@ app.post('/api/send_personalpromo_tojb', async (req, res) => {
 app.post('/api/admin_add_tag', async (req, res) => {
   try {
     const { name, description } = req.body;
-    
+
     if (!name || name.trim() === '') {
       return res.status(400).json({
         error: 'Tag name is required',
@@ -1122,8 +1166,8 @@ app.post('/api/admin_add_tag', async (req, res) => {
     }
 
     // Проверяем, не существует ли уже тег с таким именем
-    const existingTag = await TagsModel.findOne({ 
-      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } 
+    const existingTag = await TagsModel.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
     });
 
     if (existingTag) {
@@ -1134,15 +1178,15 @@ app.post('/api/admin_add_tag', async (req, res) => {
 
     const newTag = new TagsModel({
       name: name.trim(),
-      description: description.trim()
+      description: description.trim(),
     });
 
     const savedTag = await newTag.save();
     console.log('[Database] New tag created:', savedTag.name);
-    
+
     res.json({
       status: 'ok',
-      tag: savedTag
+      tag: savedTag,
     });
   } catch (error) {
     console.error('[Error] Failed to create tag:', error);
@@ -1157,7 +1201,7 @@ app.post('/api/admin_add_tag', async (req, res) => {
 app.post('/api/admin_update_tag', async (req, res) => {
   try {
     const { id, name, description } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         error: 'Tag ID is required',
@@ -1177,9 +1221,9 @@ app.post('/api/admin_update_tag', async (req, res) => {
     }
 
     // Проверяем, не существует ли уже тег с таким именем (исключая текущий)
-    const existingTag = await TagsModel.findOne({ 
+    const existingTag = await TagsModel.findOne({
       name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
-      _id: { $ne: id } 
+      _id: { $ne: id },
     });
 
     if (existingTag) {
@@ -1189,16 +1233,16 @@ app.post('/api/admin_update_tag', async (req, res) => {
     }
 
     console.log('[Database] Updating tag with ID:', id);
-    
+
     const updatedTag = await TagsModel.findByIdAndUpdate(
       id,
-      { 
+      {
         name: name.trim(),
-        description: description.trim()
+        description: description.trim(),
       },
       { new: true } // Возвращаем обновленный документ
     );
-    
+
     if (!updatedTag) {
       return res.status(404).json({
         error: 'Tag not found',
@@ -1206,11 +1250,11 @@ app.post('/api/admin_update_tag', async (req, res) => {
     }
 
     console.log('[Database] Tag updated successfully:', updatedTag.name);
-    
+
     res.json({
       status: 'ok',
       message: 'Tag updated successfully',
-      tag: updatedTag
+      tag: updatedTag,
     });
   } catch (error) {
     console.error('[Error] Failed to update tag:', error);
@@ -1225,7 +1269,7 @@ app.post('/api/admin_update_tag', async (req, res) => {
 app.post('/api/admin_check_tag_usage', async (req, res) => {
   try {
     const { tagId } = req.body;
-    
+
     if (!tagId) {
       return res.status(400).json({
         error: 'Tag ID is required',
@@ -1233,14 +1277,14 @@ app.post('/api/admin_check_tag_usage', async (req, res) => {
     }
 
     console.log('[Database] Checking tag usage for ID:', tagId);
-    
+
     // Ищем пользователей с этим тегом
     const usersWithTag = await UserModel.find({ tags: tagId });
-    
+
     res.json({
       status: 'ok',
       isUsed: usersWithTag.length > 0,
-      usersCount: usersWithTag.length
+      usersCount: usersWithTag.length,
     });
   } catch (error) {
     console.error('[Error] Failed to check tag usage:', error);
@@ -1255,7 +1299,7 @@ app.post('/api/admin_check_tag_usage', async (req, res) => {
 app.post('/api/admin_delete_tag', async (req, res) => {
   try {
     const { id } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         error: 'Tag ID is required',
@@ -1263,9 +1307,9 @@ app.post('/api/admin_delete_tag', async (req, res) => {
     }
 
     console.log('[Database] Deleting tag with ID:', id);
-    
+
     const result = await TagsModel.findByIdAndDelete(id);
-    
+
     if (!result) {
       return res.status(404).json({
         error: 'Tag not found',
@@ -1273,11 +1317,11 @@ app.post('/api/admin_delete_tag', async (req, res) => {
     }
 
     console.log('[Database] Tag deleted successfully:', result.name);
-    
+
     res.json({
       status: 'ok',
       message: 'Tag deleted successfully',
-      deletedTag: result
+      deletedTag: result,
     });
   } catch (error) {
     console.error('[Error] Failed to delete tag:', error);
@@ -1293,9 +1337,9 @@ app.post('/api/admin_delete_sale', async (req, res) => {
   try {
     const { id } = req.body;
     console.log('[Database] Deleting sale with ID:', id);
-    
+
     const result = await SaleModel.findByIdAndDelete(id);
-    
+
     if (result) {
       console.log('[Database] Sale deleted successfully');
       res.json({ status: 'ok', message: 'Sale deleted successfully' });
@@ -1330,7 +1374,7 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
       buttonText_en,
       buttonText_ru,
       good,
-      isShowButton
+      isShowButton,
     } = req.body;
 
     console.log('[Database] Updating sale with ID:', id);
@@ -1353,7 +1397,7 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
       buttonText_en,
       buttonText_ru,
       good: goodValue,
-      isShowButton: isShowButton === 'true'
+      isShowButton: isShowButton === 'true',
     };
 
     // Если загружен новый файл, обновляем информацию о файле
@@ -1366,11 +1410,10 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
       };
     }
 
-    const updatedSale = await SaleModel.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    const updatedSale = await SaleModel.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!updatedSale) {
       return res.status(404).json({ error: 'Sale not found' });
@@ -1392,8 +1435,13 @@ app.post('/api/admin_update_sale', upload.single('file'), async (req, res) => {
 // Получить все настройки cashback
 app.get('/api/admin_get_cashbackball', async (req, res) => {
   try {
-    const cashbackSettings = await CashbackBallModel.find().sort({ position: 1 });
-    console.log('[Database] CashbackBall settings fetched:', cashbackSettings.length);
+    const cashbackSettings = await CashbackBallModel.find().sort({
+      position: 1,
+    });
+    console.log(
+      '[Database] CashbackBall settings fetched:',
+      cashbackSettings.length
+    );
     res.json(cashbackSettings);
   } catch (error) {
     console.error('[Error] Failed to fetch cashbackball settings:', error);
@@ -1408,7 +1456,7 @@ app.get('/api/admin_get_cashbackball', async (req, res) => {
 app.post('/api/admin_add_cashbackball', async (req, res) => {
   try {
     const { sum, percent, name } = req.body;
-    
+
     if (sum === undefined || sum === null || isNaN(sum) || sum < 0) {
       return res.status(400).json({
         error: 'Sum is required and must be a positive number or zero',
@@ -1428,20 +1476,22 @@ app.post('/api/admin_add_cashbackball', async (req, res) => {
     }
 
     // Получаем максимальную позицию и добавляем 1
-    const maxPositionDoc = await CashbackBallModel.findOne().sort({ position: -1 });
+    const maxPositionDoc = await CashbackBallModel.findOne().sort({
+      position: -1,
+    });
     const nextPosition = maxPositionDoc ? maxPositionDoc.position + 1 : 1;
 
     const newCashbackSetting = new CashbackBallModel({
       sum: parseFloat(sum),
       percent: parseFloat(percent),
       name: name.trim(),
-      position: nextPosition
+      position: nextPosition,
     });
 
     const savedSetting = await newCashbackSetting.save();
-    
+
     console.log('[Database] CashbackBall setting created:', savedSetting._id);
-    
+
     res.json({
       status: 'ok',
       cashbackSetting: savedSetting,
@@ -1459,14 +1509,14 @@ app.post('/api/admin_add_cashbackball', async (req, res) => {
 app.post('/api/admin_update_cashbackball', async (req, res) => {
   try {
     const { id, sum, percent } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         error: 'ID is required',
       });
     }
 
-    console.log('SUM', sum)
+    console.log('SUM', sum);
 
     if (sum === undefined || sum === null || isNaN(sum) || sum < 0) {
       return res.status(400).json({
@@ -1479,8 +1529,6 @@ app.post('/api/admin_update_cashbackball', async (req, res) => {
         error: 'Percent is required and must be between 1 and 100',
       });
     }
-
-   
 
     const updatedSetting = await CashbackBallModel.findByIdAndUpdate(
       id,
@@ -1498,7 +1546,7 @@ app.post('/api/admin_update_cashbackball', async (req, res) => {
     }
 
     console.log('[Database] CashbackBall setting updated:', updatedSetting._id);
-    
+
     res.json({
       status: 'ok',
       cashbackSetting: updatedSetting,
@@ -1516,7 +1564,7 @@ app.post('/api/admin_update_cashbackball', async (req, res) => {
 app.post('/api/admin_delete_cashbackball', async (req, res) => {
   try {
     const { id } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         error: 'ID is required',
@@ -1532,7 +1580,7 @@ app.post('/api/admin_delete_cashbackball', async (req, res) => {
     }
 
     console.log('[Database] CashbackBall setting deleted:', deletedSetting._id);
-    
+
     res.json({
       status: 'ok',
       deletedSetting: deletedSetting,
@@ -1550,10 +1598,16 @@ app.post('/api/admin_delete_cashbackball', async (req, res) => {
 app.get('/api/get_cashbackball_levels', async (req, res) => {
   try {
     const cashbackLevels = await CashbackBallModel.find().sort({ position: 1 });
-    console.log('[Database] CashbackBall levels fetched for users:', cashbackLevels.length);
+    console.log(
+      '[Database] CashbackBall levels fetched for users:',
+      cashbackLevels.length
+    );
     res.json(cashbackLevels);
   } catch (error) {
-    console.error('[Error] Failed to fetch cashbackball levels for users:', error);
+    console.error(
+      '[Error] Failed to fetch cashbackball levels for users:',
+      error
+    );
     res.status(500).json({
       error: 'Server error',
       details: error.message,
@@ -1569,19 +1623,21 @@ app.get('/api/user_get_orders', async (req, res) => {
     if (!tlgid) {
       return res.status(400).json({
         status: 'error',
-        message: 'tlgid is required'
+        message: 'tlgid is required',
       });
     }
-    
+
     const exchangeRates = await currencyConverter();
 
-    console.log('exchangeRates',exchangeRates)
+    console.log('exchangeRates', exchangeRates);
 
     const user = await UserModel.findOne({ tlgid });
     const valute = user?.valute || 'eur';
-    const cashbackBall_inEu = user?.cashbackBall
+    const cashbackBall_inEu = user?.cashbackBall;
 
-    const cashbackBall = (Number(cashbackBall_inEu) * Number(exchangeRates[valute])).toFixed(2)
+    const cashbackBall = (
+      Number(cashbackBall_inEu) * Number(exchangeRates[valute])
+    ).toFixed(2);
 
     // Получаем заказы с оплатой
     const orders = await OrdersModel.find({ tlgid, payStatus: true })
@@ -1607,14 +1663,14 @@ app.get('/api/user_get_orders', async (req, res) => {
 
     // Получаем уровни кешбека
     const cashbackLevels = await CashbackBallModel.find().lean();
-    
+
     // Сортируем уровни по sum (по возрастанию)
     const sortedLevels = cashbackLevels.sort((a, b) => a.sum - b.sum);
-    
+
     // Создаем массив уровней в валюте клиента
-    const sortedLevelsUserCurrency = sortedLevels.map(level => ({
+    const sortedLevelsUserCurrency = sortedLevels.map((level) => ({
       ...level,
-      sum: parseFloat((level.sum * exchangeRates[valute]).toFixed(2))
+      sum: parseFloat((level.sum * exchangeRates[valute]).toFixed(2)),
     }));
 
     // Определяем текущий уровень кешбека клиента
@@ -1626,7 +1682,7 @@ app.get('/api/user_get_orders', async (req, res) => {
     for (let i = 0; i < sortedLevels.length; i++) {
       if (totalSumInEur >= sortedLevels[i].sum) {
         currentLevel = sortedLevels[i].position || sortedLevels[i].name;
-        currentPercent = sortedLevels[i].percent
+        currentPercent = sortedLevels[i].percent;
       } else {
         // Нашли следующий уровень
         nextLevelSum = sortedLevels[i].sum;
@@ -1649,10 +1705,15 @@ app.get('/api/user_get_orders', async (req, res) => {
     }
 
     // Конвертируем deltaToNextLevel в валюту пользователя
-    const deltaToNextLevelInUserCurrency = deltaToNextLevel * exchangeRates[valute];
+    const deltaToNextLevelInUserCurrency =
+      deltaToNextLevel * exchangeRates[valute];
 
-    console.log(`[Database] Orders fetched for user ${tlgid}: ${purchaseQty} orders, total sum: ${totalSumInEur} EUR (${totalSumInUserCurrency.toFixed(2)} ${valute}), level: ${currentLevel}, next level in: ${deltaToNextLevel} EUR`);
-    
+    console.log(
+      `[Database] Orders fetched for user ${tlgid}: ${purchaseQty} orders, total sum: ${totalSumInEur} EUR (${totalSumInUserCurrency.toFixed(
+        2
+      )} ${valute}), level: ${currentLevel}, next level in: ${deltaToNextLevel} EUR`
+    );
+
     res.json({
       cashbackBall,
       purchaseQty,
@@ -1661,8 +1722,10 @@ app.get('/api/user_get_orders', async (req, res) => {
       valute,
       currentPercent,
       currentCashbackLevel: currentLevel,
-      deltaToNextLevelInUserCurrency: parseFloat(deltaToNextLevelInUserCurrency.toFixed(2)),
-      sortedLevelsUserCurrency: sortedLevelsUserCurrency
+      deltaToNextLevelInUserCurrency: parseFloat(
+        deltaToNextLevelInUserCurrency.toFixed(2)
+      ),
+      sortedLevelsUserCurrency: sortedLevelsUserCurrency,
     });
   } catch (error) {
     console.error('[Error] Failed to fetch user orders:', error);
@@ -1734,14 +1797,22 @@ app.post('/api/admin_update_user_tags', async (req, res) => {
 // обновить информацию о специальном предложении товара
 app.post('/api/admin_update_sale_info', async (req, res) => {
   try {
-    const { goodId, saleValue, infoForFront_de, infoForFront_en, infoForFront_ru } = req.body;
+    const {
+      goodId,
+      saleValue,
+      infoForFront_de,
+      infoForFront_en,
+      infoForFront_ru,
+    } = req.body;
 
     if (!goodId) {
       return res.status(400).json({ error: 'Good ID is required' });
     }
 
     if (!saleValue || isNaN(Number(saleValue)) || Number(saleValue) <= 0) {
-      return res.status(400).json({ error: 'Sale value must be a positive number' });
+      return res
+        .status(400)
+        .json({ error: 'Sale value must be a positive number' });
     }
 
     // Получаем текущий товар для расчета новой цены
@@ -1765,8 +1836,8 @@ app.post('/api/admin_update_sale_info', async (req, res) => {
           saleValue: Number(saleValue),
           infoForFront_de: infoForFront_de || '',
           infoForFront_en: infoForFront_en || '',
-          infoForFront_ru: infoForFront_ru || ''
-        }
+          infoForFront_ru: infoForFront_ru || '',
+        },
       },
       { new: true }
     );
@@ -1811,8 +1882,8 @@ app.post('/api/admin_cancel_sale_offer', async (req, res) => {
           saleValue: null,
           infoForFront_de: null,
           infoForFront_en: null,
-          infoForFront_ru: null
-        }
+          infoForFront_ru: null,
+        },
       },
       { new: true }
     );
@@ -1907,15 +1978,14 @@ app.get('/api/user_get_goods', async (req, res) => {
     const user = await UserModel.findOne({ tlgid: req.query.tlgid });
     const userValute = user.valute;
 
-
     const exchangeRates = await currencyConverter();
 
     const newGoods = goods.map((good) => ({
       ...good,
       valuteToShow: userValute,
-      basePriceToShowClientValute:parseFloat(
+      basePriceToShowClientValute: parseFloat(
         (good.price_eu * exchangeRates[userValute]).toFixed(2)
-      ), 
+      ),
       priceToShow: parseFloat(
         (good.priceToShow_eu * exchangeRates[userValute]).toFixed(2)
       ),
@@ -1953,7 +2023,7 @@ app.get('/api/user_get_currentgood', async (req, res) => {
     const newGood = {
       ...good,
       valuteToShow: userValute,
-      basePriceToShowClientValute:parseFloat(
+      basePriceToShowClientValute: parseFloat(
         (good.price_eu * exchangeRates[userValute]).toFixed(2)
       ),
       priceToShow: parseFloat(
@@ -2226,9 +2296,8 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
       // const user = await UserModel.findOne({ tlgid: userid });
       const user = await UserModel.findOneAndUpdate(
         { tlgid: userid },
-        { crmStatus: 2},
-        { new: true}
-      
+        { crmStatus: 2 },
+        { new: true }
       );
       const jbid = user.jbid;
 
@@ -2241,7 +2310,6 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         });
         await newCart.save();
 
-
         // отправить запрос в JB для создания тегов для дожима и рассылок
         // 1) добавить тег addGoodToCartNotStartPaying
         // 2) удалить теги notAddGoodAtCart, crmStatus0
@@ -2249,10 +2317,10 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         // 4) добавить переменную timeItemsAddedToCart - это время в unix, когда создалась корзина
         // 5) добавить переменную messageNumber - номер дожимаещего сообщения
 
-        const jbtoken = process.env.JB_TOKEN
-        const jburlSetTag = process.env.JB_URL_SET_TAG
-        const jburlDelTag = process.env.JB_URL_DEL_TAG
-        const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+        const jbtoken = process.env.JB_TOKEN;
+        const jburlSetTag = process.env.JB_URL_SET_TAG;
+        const jburlDelTag = process.env.JB_URL_DEL_TAG;
+        const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
         // utc time
         const timeItemsAddedToCart = Math.floor(Date.now() / 1000);
@@ -2260,122 +2328,120 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
         const bodySetTag = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "addGoodToCartNotStartPaying",
-        }
-        
+          name: 'addGoodToCartNotStartPaying',
+        };
+
         const bodyDelTag = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "notAddGoodAtCart",
-        }
-        
+          name: 'notAddGoodAtCart',
+        };
+
         const bodyDelTag2 = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "crmStatus0",
-        }
-        
+          name: 'crmStatus0',
+        };
+
         const bodyUpdateVar = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "context",
-          value: "series3_message1"
-        }
-        
+          name: 'context',
+          value: 'series3_message1',
+        };
+
         const bodyUpdateVar2 = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "crmStatus",
-          value: "2"
-        }
-        
+          name: 'crmStatus',
+          value: '2',
+        };
+
         const bodyUpdateVar3 = {
           api_token: jbtoken,
           contact_id: jbid,
-          name: "timeItemsAddedToCart",
-          value: `${timeItemsAddedToCart}`
+          name: 'timeItemsAddedToCart',
+          value: `${timeItemsAddedToCart}`,
+        };
+
+        const safeRequest = async (url, body, headers) => {
+          try {
+            return await axios.post(url, body, { headers });
+          } catch (error) {
+            console.error('Request failed:', error.message);
+            return null;
+          }
+        };
+
+        //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+        // м.б. далее снизить до 500мс iso 1000мс
+
+        const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+          'Content-Type': 'application/json',
+        });
+        await delay(500);
+
+        const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+          'Content-Type': 'application/json',
+        });
+        await delay(500);
+
+        const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
+          'Content-Type': 'application/json',
+        });
+        await delay(500);
+
+        const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+          'Content-Type': 'application/json',
+        });
+        await delay(500);
+
+        const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+          'Content-Type': 'application/json',
+        });
+        await delay(500);
+
+        const response6 = await safeRequest(jburlUpdateVar, bodyUpdateVar3, {
+          'Content-Type': 'application/json',
+        });
+
+        if (response1 && response1.status >= 200 && response1.status < 300) {
+          console.log('response 1: данные в JB отправлены успешно');
+        } else {
+          console.error('response 1: ошибка отправки данных в JB');
         }
-        
 
-        const safeRequest = async (url, body, headers) => {      
-        try {
-          return await axios.post(url, body, { headers });     
-        } catch (error) {
-          console.error('Request failed:', error.message);     
-          return null;
+        if (response2 && response2.status >= 200 && response2.status < 300) {
+          console.log('response 2: данные в JB отправлены успешно');
+        } else {
+          console.error('response 2: ошибка отправки данных в JB');
         }
-      };
 
-      //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
-      // м.б. далее снизить до 500мс iso 1000мс
+        if (response3 && response3.status >= 200 && response3.status < 300) {
+          console.log('response 3: данные в JB отправлены успешно');
+        } else {
+          console.error('response 3: ошибка отправки данных в JB');
+        }
 
-      const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        if (response4 && response4.status >= 200 && response4.status < 300) {
+          console.log('response 4: данные в JB отправлены успешно');
+        } else {
+          console.error('response 4: ошибка отправки данных в JB');
+        }
 
-      const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-      'Content-Type': 'application/json' });
-      await delay(500);
+        if (response5 && response5.status >= 200 && response5.status < 300) {
+          console.log('response 5: данные в JB отправлены успешно');
+        } else {
+          console.error('response 5: ошибка отправки данных в JB');
+        }
 
-      const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
-      'Content-Type': 'application/json' });
-      await delay(500);
-
-      const response3 = await safeRequest(jburlDelTag, bodyDelTag2, {
-      'Content-Type': 'application/json' });
-      await delay(500);
-
-      const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-      'Content-Type': 'application/json' });
-      await delay(500);
-
-      const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-      'Content-Type': 'application/json' });
-      await delay(500);
-
-      const response6 = await safeRequest(jburlUpdateVar, bodyUpdateVar3, {
-      'Content-Type': 'application/json' });
-
-
-        if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
-
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-         
-          if (response4 && response4.status >= 200 && response4.status < 300 ) {
-                    console.log('response 4: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 4: ошибка отправки данных в JB');
-          }
-          
-          if (response5 && response5.status >= 200 && response5.status < 300 ) {
-                    console.log('response 5: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 5: ошибка отправки данных в JB');
-          }
-         
-          if (response6 && response6.status >= 200 && response6.status < 300 ) {
-                    console.log('response 6: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 6: ошибка отправки данных в JB');
-          }
-  
-
-
-
-
-
+        if (response6 && response6.status >= 200 && response6.status < 300) {
+          console.log('response 6: данные в JB отправлены успешно');
+        } else {
+          console.error('response 6: ошибка отправки данных в JB');
+        }
 
         return res.status(200).json({ status: 'ok', action: 'cart created' });
       }
@@ -2436,118 +2502,111 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
     // Проверяем, остались ли товары в корзине
     if (cart.goods.length === 0) {
       const foundCart = await CartsModel.findOne({ tlgid: userid });
-      const jbid = foundCart.jbid
+      const jbid = foundCart.jbid;
 
       await CartsModel.deleteOne({ tlgid: userid });
 
+      await UserModel.findOneAndUpdate({ tlgid: userid }, { crmStatus: 1 });
 
-      await UserModel.findOneAndUpdate(
-        { tlgid: userid },
-        { crmStatus: 1  }
-      );
+      // возвращаем JB в пред состояние
+      // 1)  добавить тег notAddGoodAtCart
+      // 2)  удалить теги crmStatus0, addGoodToCartNotStartPaying
+      // 3)  изменить переменные: context = series2_message1 , crmStatus= 1
 
+      const jbtoken = process.env.JB_TOKEN;
+      const jburlSetTag = process.env.JB_URL_SET_TAG;
+      const jburlDelTag = process.env.JB_URL_DEL_TAG;
+      const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
-        // возвращаем JB в пред состояние
-        // 1)  добавить тег notAddGoodAtCart
-        // 2)  удалить теги crmStatus0, addGoodToCartNotStartPaying
-        // 3)  изменить переменные: context = series2_message1 , crmStatus= 1
+      const bodySetTag = {
+        api_token: jbtoken,
+        contact_id: jbid,
+        name: 'notAddGoodAtCart',
+      };
 
-        const jbtoken = process.env.JB_TOKEN
-        const jburlSetTag = process.env.JB_URL_SET_TAG
-        const jburlDelTag = process.env.JB_URL_DEL_TAG
-        const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+      const bodyDelTag = {
+        api_token: jbtoken,
+        contact_id: jbid,
+        name: 'addGoodToCartNotStartPaying',
+      };
 
-        const bodySetTag = {
-          api_token: jbtoken,
-          contact_id: jbid,
-          name: "notAddGoodAtCart",
-        }
-        
-        const bodyDelTag = {
-          api_token: jbtoken,
-          contact_id: jbid,
-          name: "addGoodToCartNotStartPaying",
-        }
-        
-        const bodyDelTag2 = {
-          api_token: jbtoken,
-          contact_id: jbid,
-          name: "crmStatus0",
-        }
-        
-        const bodyUpdateVar = {
-          api_token: jbtoken,
-          contact_id: jbid,
-          name: "context",
-          value: "series2_message1"
-        }
-        
-        const bodyUpdateVar2 = {
-          api_token: jbtoken,
-          contact_id: jbid,
-          name: "crmStatus",
-          value: "1"
-        }
+      const bodyDelTag2 = {
+        api_token: jbtoken,
+        contact_id: jbid,
+        name: 'crmStatus0',
+      };
 
+      const bodyUpdateVar = {
+        api_token: jbtoken,
+        contact_id: jbid,
+        name: 'context',
+        value: 'series2_message1',
+      };
 
-        const safeRequest = async (url, body, headers) => {      
+      const bodyUpdateVar2 = {
+        api_token: jbtoken,
+        contact_id: jbid,
+        name: 'crmStatus',
+        value: '1',
+      };
+
+      const safeRequest = async (url, body, headers) => {
         try {
-          return await axios.post(url, body, { headers });     
+          return await axios.post(url, body, { headers });
         } catch (error) {
-          console.error('Request failed:', error.message);     
+          console.error('Request failed:', error.message);
           return null;
         }
       };
 
-      const [response1, response2, response3, response4, response5] = await
-      Promise.all([
-        safeRequest(jburlSetTag, bodySetTag, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlDelTag, bodyDelTag, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlDelTag, bodyDelTag2, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlUpdateVar, bodyUpdateVar, {
-      'Content-Type': 'application/json' }),
-        safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-      'Content-Type': 'application/json' })
-      ]);
+      const [response1, response2, response3, response4, response5] =
+        await Promise.all([
+          safeRequest(jburlSetTag, bodySetTag, {
+            'Content-Type': 'application/json',
+          }),
+          safeRequest(jburlDelTag, bodyDelTag, {
+            'Content-Type': 'application/json',
+          }),
+          safeRequest(jburlDelTag, bodyDelTag2, {
+            'Content-Type': 'application/json',
+          }),
+          safeRequest(jburlUpdateVar, bodyUpdateVar, {
+            'Content-Type': 'application/json',
+          }),
+          safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+            'Content-Type': 'application/json',
+          }),
+        ]);
 
+      if (response1 && response1.status >= 200 && response1.status < 300) {
+        console.log('response 1: данные в JB отправлены успешно');
+      } else {
+        console.error('response 1: ошибка отправки данных в JB');
+      }
 
-      if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
+      if (response2 && response2.status >= 200 && response2.status < 300) {
+        console.log('response 2: данные в JB отправлены успешно');
+      } else {
+        console.error('response 2: ошибка отправки данных в JB');
+      }
 
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-         
-          if (response4 && response4.status >= 200 && response4.status < 300 ) {
-                    console.log('response 4: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 4: ошибка отправки данных в JB');
-          }
-          
-          if (response5 && response5.status >= 200 && response5.status < 300 ) {
-                    console.log('response 5: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 5: ошибка отправки данных в JB');
-          }
+      if (response3 && response3.status >= 200 && response3.status < 300) {
+        console.log('response 3: данные в JB отправлены успешно');
+      } else {
+        console.error('response 3: ошибка отправки данных в JB');
+      }
 
+      if (response4 && response4.status >= 200 && response4.status < 300) {
+        console.log('response 4: данные в JB отправлены успешно');
+      } else {
+        console.error('response 4: ошибка отправки данных в JB');
+      }
 
-
-
-
+      if (response5 && response5.status >= 200 && response5.status < 300) {
+        console.log('response 5: данные в JB отправлены успешно');
+      } else {
+        console.error('response 5: ошибка отправки данных в JB');
+      }
 
       return res.status(200).json({ status: 'ok', action: 'cart deleted' });
     }
@@ -2602,7 +2661,6 @@ app.get('/api/user_get_mycart', async (req, res) => {
             deliveryPriceOutEu * exchangeRates[userValute]
           ).toFixed(2);
 
-
           return {
             name_en: good.name_en,
             name_de: good.name_de,
@@ -2621,7 +2679,6 @@ app.get('/api/user_get_mycart', async (req, res) => {
             totalpriceItem: (convertedPrice * itemQty).toFixed(2),
             valuteToShow: userValute,
             isSaleNow: good.isSaleNow,
-            
           };
         } catch (error) {
           console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
@@ -2685,25 +2742,22 @@ app.post('/api/change_language', async (req, res) => {
 
     // console.log('updatedUser', updatedUser)
 
-    const jbid = updatedUser.jbid
-    const jburl = process.env.JB_URL_UPDATE_VAR
-    const jbtoken = process.env.JB_TOKEN
+    const jbid = updatedUser.jbid;
+    const jburl = process.env.JB_URL_UPDATE_VAR;
+    const jbtoken = process.env.JB_TOKEN;
 
     const bodyForRqst = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "language",
-      value: req.body.language
-    }
+      name: 'language',
+      value: req.body.language,
+    };
 
-    
-    const response = await axios.post(jburl, bodyForRqst, 
-     { headers: {
-      'Content-Type': 'application/json',
-    }}
-    );
-
-
+    const response = await axios.post(jburl, bodyForRqst, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
     return res.json({ status: 'ok' });
   } catch (err) {
@@ -2860,18 +2914,14 @@ app.get('/api/admin_get_countries', async (req, res) => {
 // создать новую страну для доставки
 app.post('/api/admin_add_new_country', async (req, res) => {
   try {
-
-
     const document = new CountriesForDeliveryModel({
       name_de: req.body.array.name_de,
       name_en: req.body.array.name_en,
       name_ru: req.body.array.name_ru,
       isEU: req.body.array.isEU,
     });
-   
 
     await document.save();
-
 
     res.status(201).json({ status: 'ok' });
   } catch (error) {
@@ -2928,9 +2978,9 @@ app.post('/api/admin_delete_country', async (req, res) => {
     const { id } = req.body;
 
     if (!id) {
-      return res.status(400).json({ 
-        status: 'error', 
-        message: 'Country ID is required' 
+      return res.status(400).json({
+        status: 'error',
+        message: 'Country ID is required',
       });
     }
 
@@ -2938,16 +2988,16 @@ app.post('/api/admin_delete_country', async (req, res) => {
 
     if (!result) {
       console.warn(`Country with id ${id} not found`);
-      return res.status(404).json({ 
-        status: 'error', 
-        message: 'Country not found' 
+      return res.status(404).json({
+        status: 'error',
+        message: 'Country not found',
       });
     }
 
-    res.status(200).json({ 
-      status: 'ok', 
+    res.status(200).json({
+      status: 'ok',
       message: 'Country deleted successfully',
-      data: result 
+      data: result,
     });
   } catch (error) {
     console.error('[Error] Deleting country:', error);
@@ -2970,15 +3020,23 @@ app.post('/api/admin_add_new_promocode', async (req, res) => {
       code,
       sale,
       expiryDate,
-      forFirstPurchase
+      forFirstPurchase,
     } = req.body;
 
     // Проверяем, что все обязательные поля заполнены
-    if (!description_admin || !description_users_de || !description_users_en || 
-        !description_users_ru || !code || sale === undefined || sale === null || !expiryDate) {
+    if (
+      !description_admin ||
+      !description_users_de ||
+      !description_users_en ||
+      !description_users_ru ||
+      !code ||
+      sale === undefined ||
+      sale === null ||
+      !expiryDate
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'All fields are required'
+        message: 'All fields are required',
       });
     }
 
@@ -2987,7 +3045,7 @@ app.post('/api/admin_add_new_promocode', async (req, res) => {
     if (existingPromocode) {
       return res.status(400).json({
         status: 'error',
-        message: 'Promocode already exists'
+        message: 'Promocode already exists',
       });
     }
 
@@ -3001,15 +3059,15 @@ app.post('/api/admin_add_new_promocode', async (req, res) => {
       type: 'general', // По умолчанию general
       expiryDate: new Date(expiryDate),
       isActive: true,
-      forFirstPurshase: forFirstPurchase || false
+      forFirstPurshase: forFirstPurchase || false,
     });
 
     await document.save();
 
-    res.status(201).json({ 
+    res.status(201).json({
       status: 'ok',
       message: 'Promocode created successfully',
-      data: document
+      data: document,
     });
   } catch (error) {
     console.error('[Error] Creating promocode:', error);
@@ -3017,7 +3075,7 @@ app.post('/api/admin_add_new_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while creating promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3030,27 +3088,27 @@ app.post('/api/admin_find_user_by_tlgid', async (req, res) => {
     if (!tlgid) {
       return res.status(400).json({
         status: 'error',
-        message: 'Telegram ID is required'
+        message: 'Telegram ID is required',
       });
     }
 
     // Ищем пользователя по tlgid
     const user = await UserModel.findOne({ tlgid: tlgid });
-    
+
     if (user) {
       res.json({
         status: 'ok',
         found: true,
         user: {
           tlgid: user.tlgid,
-          name: user.name || 'N/A'
-        }
+          name: user.name || 'N/A',
+        },
       });
     } else {
       res.json({
         status: 'ok',
         found: false,
-        message: 'User with mentioned telegram id not found'
+        message: 'User with mentioned telegram id not found',
       });
     }
   } catch (error) {
@@ -3058,7 +3116,7 @@ app.post('/api/admin_find_user_by_tlgid', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while finding user',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3075,16 +3133,24 @@ app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
       sale,
       tlgid,
       expiryDate,
-      forFirstPurchase
+      forFirstPurchase,
     } = req.body;
 
     // Проверяем, что все обязательные поля заполнены
-    if (!description_admin || !description_users_de || !description_users_en || 
-        !description_users_ru || !code || sale === undefined || sale === null || 
-        !tlgid || !expiryDate) {
+    if (
+      !description_admin ||
+      !description_users_de ||
+      !description_users_en ||
+      !description_users_ru ||
+      !code ||
+      sale === undefined ||
+      sale === null ||
+      !tlgid ||
+      !expiryDate
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'All fields are required'
+        message: 'All fields are required',
       });
     }
 
@@ -3093,30 +3159,34 @@ app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
     if (!user) {
       return res.status(400).json({
         status: 'error',
-        message: 'User not found with provided telegram id'
+        message: 'User not found with provided telegram id',
       });
     }
 
     // Проверяем, что персональный промокод уникальный
-    const existingPromocode = await PromocodesPersonalModel.findOne({ code: code });
+    const existingPromocode = await PromocodesPersonalModel.findOne({
+      code: code,
+    });
     if (existingPromocode) {
       return res.status(400).json({
         status: 'error',
-        message: 'Personal promocode already exists'
+        message: 'Personal promocode already exists',
       });
     }
 
     // Также проверяем в обычных промокодах
-    const existingGeneralPromocode = await PromocodesModel.findOne({ code: code });
+    const existingGeneralPromocode = await PromocodesModel.findOne({
+      code: code,
+    });
     if (existingGeneralPromocode) {
       return res.status(400).json({
         status: 'error',
-        message: 'Promocode already exists in general promocodes'
+        message: 'Promocode already exists in general promocodes',
       });
     }
 
     const document = new PromocodesPersonalModel({
-      tlgid: user._id,  // Сохраняем ObjectId пользователя, а не строку tlgid
+      tlgid: user._id, // Сохраняем ObjectId пользователя, а не строку tlgid
       description_admin: description_admin,
       description_users_de: description_users_de,
       description_users_en: description_users_en,
@@ -3127,15 +3197,15 @@ app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
       expiryDate: new Date(expiryDate),
       isActive: true,
       isUsed: false,
-      forFirstPurshase: forFirstPurchase || false
+      forFirstPurshase: forFirstPurchase || false,
     });
 
     await document.save();
 
-    res.status(201).json({ 
+    res.status(201).json({
       status: 'ok',
       message: 'Personal promocode created successfully',
-      data: document
+      data: document,
     });
   } catch (error) {
     console.error('[Error] Creating personal promocode:', error);
@@ -3143,29 +3213,28 @@ app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while creating personal promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
 
-
-
 // создать новый персональный промокод - за приглашение рефералов
 
-async function createPersonalPromoForReferals(tlgidValue, saleValue,qtyOfReferals){
-
+async function createPersonalPromoForReferals(
+  tlgidValue,
+  saleValue,
+  qtyOfReferals
+) {
   try {
-    
-    
-    const description_admin = `code generated by system for inviting ${qtyOfReferals} referals`
-    const description_users_de = `promo-code für die einladung von empfehlungen - ${qtyOfReferals} pers.`
-    const description_users_en = `promocode for inviting referals - ${qtyOfReferals} pers.`
-    const description_users_ru = `промокод за приглашение рефералов - ${qtyOfReferals} чел.`
+    const description_admin = `code generated by system for inviting ${qtyOfReferals} referals`;
+    const description_users_de = `promo-code für die einladung von empfehlungen - ${qtyOfReferals} pers.`;
+    const description_users_en = `promocode for inviting referals - ${qtyOfReferals} pers.`;
+    const description_users_ru = `промокод за приглашение рефералов - ${qtyOfReferals} чел.`;
     // const code = '7771122'
-    const tlgid = tlgidValue
+    const tlgid = tlgidValue;
     const today = new Date();
-    const expiryDate = new Date(today.getTime() + (90 * 24 * 60 * 60 * 1000));
-    
+    const expiryDate = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000);
+
     // функция генерации промокода
     const generateRandomCode = () => {
       const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -3176,14 +3245,14 @@ async function createPersonalPromoForReferals(tlgidValue, saleValue,qtyOfReferal
       return result;
     };
 
-    const code = generateRandomCode(); 
+    const code = generateRandomCode();
 
     // Находим пользователя по tlgid чтобы получить его ObjectId
     const user = await UserModel.findOne({ tlgid: tlgid });
     if (!user) {
       return res.status(400).json({
         status: 'error',
-        message: 'User not found with provided telegram id'
+        message: 'User not found with provided telegram id',
       });
     }
 
@@ -3206,7 +3275,7 @@ async function createPersonalPromoForReferals(tlgidValue, saleValue,qtyOfReferal
     // }
 
     const document = new PromocodesPersonalModel({
-      tlgid: user._id,  // Сохраняем ObjectId пользователя, а не строку tlgid
+      tlgid: user._id, // Сохраняем ObjectId пользователя, а не строку tlgid
       description_admin: description_admin,
       description_users_de: description_users_de,
       description_users_en: description_users_en,
@@ -3218,23 +3287,18 @@ async function createPersonalPromoForReferals(tlgidValue, saleValue,qtyOfReferal
       isActive: true,
       isUsed: false,
       forFirstPurshase: false,
-      generatedBy: 'system'
+      generatedBy: 'system',
     });
 
     await document.save();
 
-    return ({status: 'created'})
-
-    
+    return { status: 'created' };
   } catch (error) {
     console.error('[Error] Creating personal promocode:', error);
     console.error('[Error] Stack:', error.stack);
-    return ({status: 'error'})
-   
+    return { status: 'error' };
   }
-};
-
-
+}
 
 // обновить промокод
 app.post('/api/admin_update_promocode', async (req, res) => {
@@ -3247,15 +3311,22 @@ app.post('/api/admin_update_promocode', async (req, res) => {
       description_users_en,
       description_users_ru,
       expiryDate,
-      forFirstPurchase
+      forFirstPurchase,
     } = req.body;
 
     // Проверяем, что все обязательные поля заполнены
-    if (!id || !code || !description_admin || !description_users_de || 
-        !description_users_en || !description_users_ru || !expiryDate) {
+    if (
+      !id ||
+      !code ||
+      !description_admin ||
+      !description_users_de ||
+      !description_users_en ||
+      !description_users_ru ||
+      !expiryDate
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'All fields are required'
+        message: 'All fields are required',
       });
     }
 
@@ -3264,17 +3335,20 @@ app.post('/api/admin_update_promocode', async (req, res) => {
     if (!existingPromocode) {
       return res.status(404).json({
         status: 'error',
-        message: 'Promocode not found'
+        message: 'Promocode not found',
       });
     }
 
     // Если код изменился, проверяем уникальность
     if (existingPromocode.code !== code) {
-      const codeExists = await PromocodesModel.findOne({ code: code, _id: { $ne: id } });
+      const codeExists = await PromocodesModel.findOne({
+        code: code,
+        _id: { $ne: id },
+      });
       if (codeExists) {
         return res.status(400).json({
           status: 'error',
-          message: 'Promocode with this code already exists'
+          message: 'Promocode with this code already exists',
         });
       }
     }
@@ -3289,7 +3363,7 @@ app.post('/api/admin_update_promocode', async (req, res) => {
         description_users_en: description_users_en,
         description_users_ru: description_users_ru,
         expiryDate: new Date(expiryDate),
-        forFirstPurshase: forFirstPurchase || false
+        forFirstPurshase: forFirstPurchase || false,
       },
       { new: true }
     );
@@ -3297,7 +3371,7 @@ app.post('/api/admin_update_promocode', async (req, res) => {
     res.json({
       status: 'ok',
       message: 'Promocode updated successfully',
-      promocode: updatedPromocode
+      promocode: updatedPromocode,
     });
   } catch (error) {
     console.error('[Error] Updating promocode:', error);
@@ -3305,7 +3379,7 @@ app.post('/api/admin_update_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while updating promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3318,7 +3392,7 @@ app.post('/api/admin_deactivate_promocode', async (req, res) => {
     if (!id) {
       return res.status(400).json({
         status: 'error',
-        message: 'Promocode ID is required'
+        message: 'Promocode ID is required',
       });
     }
 
@@ -3327,7 +3401,7 @@ app.post('/api/admin_deactivate_promocode', async (req, res) => {
     if (!existingPromocode) {
       return res.status(404).json({
         status: 'error',
-        message: 'Promocode not found'
+        message: 'Promocode not found',
       });
     }
 
@@ -3341,9 +3415,9 @@ app.post('/api/admin_deactivate_promocode', async (req, res) => {
     res.json({
       status: 'ok',
       message: 'Promocode deactivated successfully',
-      promocode: updatedPromocode
+      promocode: updatedPromocode,
     });
-    
+
     console.log('[Backend] Promocode deactivated:', updatedPromocode);
   } catch (error) {
     console.error('[Error] Deactivating promocode:', error);
@@ -3351,7 +3425,7 @@ app.post('/api/admin_deactivate_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while deactivating promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3364,393 +3438,396 @@ app.post('/api/check_promocode', async (req, res) => {
     if (!rawCode && !userId) {
       return res.status(400).json({
         status: 'error',
-        message: 'Promocode and user is required'
+        message: 'Promocode and user is required',
       });
     }
 
     // нижний регистр
     const code = rawCode.trim().toLowerCase();
-    
+
     const user = await UserModel.findOne({ tlgid: userId });
     const userValute = user.valute;
-    const userLanguage = user.language
+    const userLanguage = user.language;
 
     const promocode = await PromocodesModel.findOne({ code: code });
-    const promocodePersonal = await PromocodesPersonalModel.findOne({ code: code });
-    
+    const promocodePersonal = await PromocodesPersonalModel.findOne({
+      code: code,
+    });
+
     const isNotValid = {
       de: 'der gutscheincode ist ungültig',
       en: 'promocode is not valid',
-      ru: 'промокод не действителен'
-    }
+      ru: 'промокод не действителен',
+    };
 
     const isNotActive = {
       de: 'der gutscheincode ist nicht aktiv',
       en: 'promocode is not active',
-      ru: 'промокод не активен'
-    }
+      ru: 'промокод не активен',
+    };
 
     const isExpired = {
       de: 'der gutscheincode ist abgelaufen',
       en: 'promocode has expired',
-      ru: 'срок действия истек'
-    }
+      ru: 'срок действия истек',
+    };
 
     const alreadyUsed = {
       de: 'sie haben diesen gutscheincode bereits verwendet',
       en: 'you have already used this promocode',
-      ru: 'вы уже использовали этот промокод'
-    }
+      ru: 'вы уже использовали этот промокод',
+    };
 
     const firstPurchaseOnly = {
       de: 'dieser gutscheincode gilt nur für den ersten kauf',
       en: 'this promocode is only for first purchase',
-      ru: 'этот промокод применим только к 1ой покупке'
-    }
+      ru: 'этот промокод применим только к 1ой покупке',
+    };
 
     const codeApplied = {
       de: 'promo-Code angewendet',
       en: 'promocode applied',
-      ru: 'промокод применен'
-     }
+      ru: 'промокод применен',
+    };
 
-    
     if (!promocode && !promocodePersonal) {
       return res.status(404).json({
         status: 'error',
         // message: `Промокод ${code} не действителен`
-        message: `${code} - ${isNotValid[userLanguage]}`
+        message: `${code} - ${isNotValid[userLanguage]}`,
       });
     }
-
 
     const currentDate = new Date();
-  
-    if(promocode) {
-    // Проверяем активность промокода
-    if (!promocode.isActive ) {
-      return res.status(400).json({
-        status: 'error',
-        message: isNotActive[userLanguage]
-      });
-    }
 
-     // Проверяем срок действия
-    const expiryDate = new Date(promocode.expiryDate);
+    if (promocode) {
+      // Проверяем активность промокода
+      if (!promocode.isActive) {
+        return res.status(400).json({
+          status: 'error',
+          message: isNotActive[userLanguage],
+        });
+      }
 
-     if (currentDate > expiryDate ) {
-      return res.status(400).json({
-        status: 'error',
-        message: isExpired[userLanguage]
-      });
-    }
-    
-  
-    // Если передан userId, проверяем не использовал ли уже пользователь этот промокод
+      // Проверяем срок действия
+      const expiryDate = new Date(promocode.expiryDate);
+
+      if (currentDate > expiryDate) {
+        return res.status(400).json({
+          status: 'error',
+          message: isExpired[userLanguage],
+        });
+      }
+
+      // Если передан userId, проверяем не использовал ли уже пользователь этот промокод
       if (user && promocode.tlgid.includes(user._id)) {
         return res.status(400).json({
           status: 'error',
-          message: alreadyUsed[userLanguage]
+          message: alreadyUsed[userLanguage],
         });
       }
 
       // Для промокодов только для первой покупки - проверяем есть ли у пользователя заказы
       if (promocode.forFirstPurshase && user) {
-        const userOrders = await OrdersModel.find({ tlgid: userId, payStatus: true });
+        const userOrders = await OrdersModel.find({
+          tlgid: userId,
+          payStatus: true,
+        });
         if (userOrders.length > 0) {
           return res.status(400).json({
             status: 'error',
-            message: firstPurchaseOnly[userLanguage]
+            message: firstPurchaseOnly[userLanguage],
           });
-        } 
+        }
       }
-    
 
+      const cart = await CartsModel.findOne({ tlgid: userId }).lean();
 
-    const cart = await CartsModel.findOne({ tlgid: userId }).lean();
-    
-    
-    const exchangeRates = await currencyConverter();
+      const exchangeRates = await currencyConverter();
 
-    const goodsWithDetails = await Promise.all(
-      cart.goods.map(async (item) => {
-        try {
-          const good = await GoodsModel.findById(item.itemId);
-          if (!good) {
-            console.warn(`Товар с ID ${item.itemId} не найден`);
+      const goodsWithDetails = await Promise.all(
+        cart.goods.map(async (item) => {
+          try {
+            const good = await GoodsModel.findById(item.itemId);
+            if (!good) {
+              console.warn(`Товар с ID ${item.itemId} не найден`);
+              return null;
+            }
+
+            const itemPrice = Number(good.priceToShow_eu);
+            const convertedPrice = Number(
+              itemPrice * exchangeRates[userValute]
+            ).toFixed(2);
+            const itemQty = Number(item.qty);
+
+            const deliveryPriceDe = Number(good.delivery_price_de);
+            const deliveryPriceInEu = Number(good.delivery_price_inEu);
+            const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+
+            const deliveryPriceToShow_de = Number(
+              deliveryPriceDe * exchangeRates[userValute]
+            ).toFixed(2);
+            const deliveryPriceToShow_inEu = Number(
+              deliveryPriceInEu * exchangeRates[userValute]
+            ).toFixed(2);
+            const deliveryPriceToShow_outEu = Number(
+              deliveryPriceOutEu * exchangeRates[userValute]
+            ).toFixed(2);
+
+            // если товар продается без скидки
+            let price_eu_toReturn = (
+              itemPrice *
+              (1 - Number(promocode.saleInPercent) / 100)
+            ).toFixed(2);
+            let priceToShow_toReturn = (
+              Number(convertedPrice) *
+              (1 - Number(promocode.saleInPercent) / 100)
+            ).toFixed(2);
+            let isWithPromoSale_toReturn = true;
+            let totalpriceItemWithPromo_toReturn = (
+              Number(convertedPrice) *
+              (1 - Number(promocode.saleInPercent) / 100) *
+              itemQty
+            ).toFixed(2);
+            let promocodeText_toReturn = code;
+            let promocodeType_toReturn = 'general';
+
+            // если товар продается уже по скидке
+            if (good.isSaleNow) {
+              price_eu_toReturn = itemPrice.toFixed(2);
+              priceToShow_toReturn = convertedPrice;
+              isWithPromoSale_toReturn = false;
+              totalpriceItemWithPromo_toReturn = (
+                convertedPrice * itemQty
+              ).toFixed(2);
+              promocodeText_toReturn = 'no';
+              promocodeType_toReturn = 'no';
+            }
+
+            return {
+              name_en: good.name_en,
+              name_de: good.name_de,
+              name_ru: good.name_ru,
+              price_eu: price_eu_toReturn,
+              price_euNoPromoApplied: itemPrice,
+              priceToShow: priceToShow_toReturn,
+              priceToShowNoPromoApplied: convertedPrice,
+              deliveryPriceToShow_de: deliveryPriceToShow_de,
+              deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
+              deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+              deliveryPriceEU_de: deliveryPriceDe,
+              deliveryPriceEU_inEu: deliveryPriceInEu,
+              deliveryPriceEU_outEu: deliveryPriceOutEu,
+              qty: itemQty,
+              itemId: item.itemId,
+              img: good.file?.url || null,
+              totalpriceItem: (convertedPrice * itemQty).toFixed(2),
+              totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
+              valuteToShow: userValute,
+              isSaleNow: good.isSaleNow,
+              isWithPromoSale: isWithPromoSale_toReturn,
+              promocodeText: promocodeText_toReturn,
+              promocodeType: promocodeType_toReturn,
+            };
+          } catch (error) {
+            console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
             return null;
           }
+        })
+      );
 
-          const itemPrice = Number(good.priceToShow_eu);
-          const convertedPrice = Number(
-            itemPrice * exchangeRates[userValute]
-          ).toFixed(2);
-          const itemQty = Number(item.qty);
+      // Фильтруем null значения (если какие-то товары не найдены)
+      const filteredGoods = goodsWithDetails.filter((item) => item !== null);
 
-          const deliveryPriceDe = Number(good.delivery_price_de);
-          const deliveryPriceInEu = Number(good.delivery_price_inEu);
-          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+      // Рассчитываем общее количество товаров и общую сумму
+      const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
+      const totalPrice = filteredGoods.reduce(
+        (sum, item) => sum + Number(item.totalpriceItem),
+        0
+      );
+      const totalPriceWithPromo = filteredGoods.reduce(
+        (sum, item) => sum + Number(item.totalpriceItemWithPromo),
+        0
+      );
 
-          const deliveryPriceToShow_de = Number(
-            deliveryPriceDe * exchangeRates[userValute]
-          ).toFixed(2);
-          const deliveryPriceToShow_inEu = Number(
-            deliveryPriceInEu * exchangeRates[userValute]
-          ).toFixed(2);
-          const deliveryPriceToShow_outEu = Number(
-            deliveryPriceOutEu * exchangeRates[userValute]
-          ).toFixed(2);
-
-          // если товар продается без скидки
-          let price_eu_toReturn = (itemPrice* (1 - Number(promocode.saleInPercent) / 100)).toFixed(2)
-          let priceToShow_toReturn = (Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100)).toFixed(2)
-          let isWithPromoSale_toReturn = true
-          let totalpriceItemWithPromo_toReturn = ((Number(convertedPrice) * (1 - Number(promocode.saleInPercent) / 100))*itemQty).toFixed(2)
-          let promocodeText_toReturn = code
-          let promocodeType_toReturn = 'general'
-
-
-          // если товар продается уже по скидке
-          if (good.isSaleNow){
-            price_eu_toReturn = itemPrice.toFixed(2)
-            priceToShow_toReturn = convertedPrice
-            isWithPromoSale_toReturn = false
-            totalpriceItemWithPromo_toReturn = (convertedPrice * itemQty).toFixed(2)
-            promocodeText_toReturn = 'no'
-            promocodeType_toReturn = 'no'
-          }
-
-
-          return {
-            name_en: good.name_en,
-            name_de: good.name_de,
-            name_ru: good.name_ru,
-            price_eu: price_eu_toReturn,
-            price_euNoPromoApplied: itemPrice,
-            priceToShow: priceToShow_toReturn,
-            priceToShowNoPromoApplied: convertedPrice,
-            deliveryPriceToShow_de: deliveryPriceToShow_de,
-            deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
-            deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
-            deliveryPriceEU_de: deliveryPriceDe,
-            deliveryPriceEU_inEu: deliveryPriceInEu,
-            deliveryPriceEU_outEu: deliveryPriceOutEu,
-            qty: itemQty,
-            itemId: item.itemId,
-            img: good.file?.url || null,
-            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
-            totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
-            valuteToShow: userValute,
-            isSaleNow: good.isSaleNow,
-            isWithPromoSale: isWithPromoSale_toReturn,
-            promocodeText: promocodeText_toReturn, 
-            promocodeType: promocodeType_toReturn
-            
-          };
-        } catch (error) {
-          console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
-          return null;
-        }
-      })
-    );
-
-           // Фильтруем null значения (если какие-то товары не найдены)
-    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
-
-    // Рассчитываем общее количество товаров и общую сумму
-    const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
-    const totalPrice = filteredGoods.reduce(
-      (sum, item) => sum + Number(item.totalpriceItem),
-      0
-    );
-    const totalPriceWithPromo = filteredGoods.reduce(
-      (sum, item) => sum + Number(item.totalpriceItemWithPromo),
-      0
-    );
-
-    
-
-    return res.json({
-      status: 'ok',
-      goods: filteredGoods,
-      totalQty: totalQty,
-      valuteToShow: userValute,
-      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
-      totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
-      textForUser: codeApplied[userLanguage]
-    });
-
+      return res.json({
+        status: 'ok',
+        goods: filteredGoods,
+        totalQty: totalQty,
+        valuteToShow: userValute,
+        totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
+        totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
+        textForUser: codeApplied[userLanguage],
+      });
     }
 
-    if (promocodePersonal){
-
-
+    if (promocodePersonal) {
       // Проверка, что это код данного юзера
       if (!promocodePersonal.tlgid.equals(user._id)) {
         return res.status(400).json({
           status: 'error',
-          message: `${code} - ${isNotValid[userLanguage]}`
+          message: `${code} - ${isNotValid[userLanguage]}`,
         });
       }
 
+      if (promocodePersonal.isUsed || !promocodePersonal.isActive) {
+        return res.status(400).json({
+          status: 'error',
+          message: isNotValid[userLanguage],
+        });
+      }
 
+      // Проверяем срок действия
+      const expiryDate = new Date(promocodePersonal.expiryDate);
 
+      if (currentDate > expiryDate) {
+        return res.status(400).json({
+          status: 'error',
+          message: isExpired[userLanguage],
+        });
+      }
 
-      if (promocodePersonal.isUsed || !promocodePersonal.isActive ) {
-     return res.status(400).json({
-       status: 'error',
-       message: isNotValid[userLanguage]
-     });
-   }
-
-       // Проверяем срок действия
-    const expiryDate = new Date(promocodePersonal.expiryDate);
-
-     if (currentDate > expiryDate ) {
-      return res.status(400).json({
-        status: 'error',
-        message: isExpired[userLanguage]
-      });
-    }
-    
-
-    // Для промокодов только для первой покупки - проверяем есть ли у пользователя заказы
+      // Для промокодов только для первой покупки - проверяем есть ли у пользователя заказы
       if (promocodePersonal.forFirstPurshase) {
-        const userOrders = await OrdersModel.find({ tlgid: userId, payStatus: true });
+        const userOrders = await OrdersModel.find({
+          tlgid: userId,
+          payStatus: true,
+        });
         if (userOrders.length > 0) {
           return res.status(400).json({
             status: 'error',
-            message: firstPurchaseOnly[userLanguage]
+            message: firstPurchaseOnly[userLanguage],
           });
-        } 
+        }
       }
 
+      const cart = await CartsModel.findOne({ tlgid: userId }).lean();
 
-    
-    
+      const exchangeRates = await currencyConverter();
 
-    const cart = await CartsModel.findOne({ tlgid: userId }).lean();
-    
-    const exchangeRates = await currencyConverter();
+      const goodsWithDetails = await Promise.all(
+        cart.goods.map(async (item) => {
+          try {
+            const good = await GoodsModel.findById(item.itemId);
+            if (!good) {
+              console.warn(`Товар с ID ${item.itemId} не найден`);
+              return null;
+            }
+            const itemPrice = Number(good.priceToShow_eu);
+            const convertedPrice = Number(
+              itemPrice * exchangeRates[userValute]
+            ).toFixed(2);
+            const itemQty = Number(item.qty);
 
-    const goodsWithDetails = await Promise.all(
-      cart.goods.map(async (item) => {
-        try {
-          const good = await GoodsModel.findById(item.itemId);
-          if (!good) {
-            console.warn(`Товар с ID ${item.itemId} не найден`);
+            const deliveryPriceDe = Number(good.delivery_price_de);
+            const deliveryPriceInEu = Number(good.delivery_price_inEu);
+            const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+
+            const deliveryPriceToShow_de = Number(
+              deliveryPriceDe * exchangeRates[userValute]
+            ).toFixed(2);
+            const deliveryPriceToShow_inEu = Number(
+              deliveryPriceInEu * exchangeRates[userValute]
+            ).toFixed(2);
+            const deliveryPriceToShow_outEu = Number(
+              deliveryPriceOutEu * exchangeRates[userValute]
+            ).toFixed(2);
+
+            // если товар продается без скидки
+            let price_eu_toReturn = (
+              itemPrice *
+              (1 - Number(promocodePersonal.saleInPercent) / 100)
+            ).toFixed(2);
+            let priceToShow_toReturn = (
+              Number(convertedPrice) *
+              (1 - Number(promocodePersonal.saleInPercent) / 100)
+            ).toFixed(2);
+            let isWithPromoSale_toReturn = true;
+            let totalpriceItemWithPromo_toReturn = (
+              Number(convertedPrice) *
+              (1 - Number(promocodePersonal.saleInPercent) / 100) *
+              itemQty
+            ).toFixed(2);
+            let promocodeText_toReturn = code;
+            let promocodeType_toReturn = 'personal';
+
+            // если товар продается уже по скидке
+            if (good.isSaleNow) {
+              price_eu_toReturn = itemPrice.toFixed(2);
+              priceToShow_toReturn = convertedPrice;
+              isWithPromoSale_toReturn = false;
+              totalpriceItemWithPromo_toReturn = (
+                convertedPrice * itemQty
+              ).toFixed(2);
+              promocodeText_toReturn = 'no';
+              promocodeType_toReturn = 'no';
+            }
+
+            return {
+              name_en: good.name_en,
+              name_de: good.name_de,
+              name_ru: good.name_ru,
+              price_eu: price_eu_toReturn,
+              price_euNoPromoApplied: itemPrice,
+              priceToShow: priceToShow_toReturn,
+              priceToShowNoPromoApplied: convertedPrice,
+              deliveryPriceToShow_de: deliveryPriceToShow_de,
+              deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
+              deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
+              deliveryPriceEU_de: deliveryPriceDe,
+              deliveryPriceEU_inEu: deliveryPriceInEu,
+              deliveryPriceEU_outEu: deliveryPriceOutEu,
+              qty: itemQty,
+              itemId: item.itemId,
+              img: good.file?.url || null,
+              totalpriceItem: (convertedPrice * itemQty).toFixed(2),
+              totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
+              valuteToShow: userValute,
+              isSaleNow: good.isSaleNow,
+              isWithPromoSale: isWithPromoSale_toReturn,
+              promocodeText: promocodeText_toReturn,
+              promocodeType: promocodeType_toReturn,
+            };
+          } catch (error) {
+            console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
             return null;
           }
-          const itemPrice = Number(good.priceToShow_eu);
-          const convertedPrice = Number(
-            itemPrice * exchangeRates[userValute]
-          ).toFixed(2);
-          const itemQty = Number(item.qty);
+        })
+      );
 
-          const deliveryPriceDe = Number(good.delivery_price_de);
-          const deliveryPriceInEu = Number(good.delivery_price_inEu);
-          const deliveryPriceOutEu = Number(good.delivery_price_outEu);
+      // Фильтруем null значения (если какие-то товары не найдены)
+      const filteredGoods = goodsWithDetails.filter((item) => item !== null);
 
-          const deliveryPriceToShow_de = Number(
-            deliveryPriceDe * exchangeRates[userValute]
-          ).toFixed(2);
-          const deliveryPriceToShow_inEu = Number(
-            deliveryPriceInEu * exchangeRates[userValute]
-          ).toFixed(2);
-          const deliveryPriceToShow_outEu = Number(
-            deliveryPriceOutEu * exchangeRates[userValute]
-          ).toFixed(2);
+      // Рассчитываем общее количество товаров и общую сумму
+      const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
+      const totalPrice = filteredGoods.reduce(
+        (sum, item) => sum + Number(item.totalpriceItem),
+        0
+      );
+      const totalPriceWithPromo = filteredGoods.reduce(
+        (sum, item) => sum + Number(item.totalpriceItemWithPromo),
+        0
+      );
 
+      console.log('применили');
 
-           // если товар продается без скидки
-          let price_eu_toReturn = (itemPrice* (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2)
-          let priceToShow_toReturn = (Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100)).toFixed(2)
-          let isWithPromoSale_toReturn = true
-          let totalpriceItemWithPromo_toReturn = ((Number(convertedPrice) * (1 - Number(promocodePersonal.saleInPercent) / 100))*itemQty).toFixed(2)
-          let promocodeText_toReturn = code
-          let promocodeType_toReturn = 'personal'
-
-          // если товар продается уже по скидке
-          if (good.isSaleNow){
-            price_eu_toReturn = itemPrice.toFixed(2)
-            priceToShow_toReturn = convertedPrice
-            isWithPromoSale_toReturn = false
-            totalpriceItemWithPromo_toReturn = (convertedPrice * itemQty).toFixed(2)
-            promocodeText_toReturn = 'no'
-            promocodeType_toReturn = 'no'
-          }
-
-
-          return {
-            name_en: good.name_en,
-            name_de: good.name_de,
-            name_ru: good.name_ru,
-            price_eu: price_eu_toReturn,
-            price_euNoPromoApplied: itemPrice,
-            priceToShow: priceToShow_toReturn,
-            priceToShowNoPromoApplied: convertedPrice,
-            deliveryPriceToShow_de: deliveryPriceToShow_de,
-            deliveryPriceToShow_inEu: deliveryPriceToShow_inEu,
-            deliveryPriceToShow_outEu: deliveryPriceToShow_outEu,
-            deliveryPriceEU_de: deliveryPriceDe,
-            deliveryPriceEU_inEu: deliveryPriceInEu,
-            deliveryPriceEU_outEu: deliveryPriceOutEu,
-            qty: itemQty,
-            itemId: item.itemId,
-            img: good.file?.url || null,
-            totalpriceItem: (convertedPrice * itemQty).toFixed(2),
-            totalpriceItemWithPromo: totalpriceItemWithPromo_toReturn,
-            valuteToShow: userValute,
-            isSaleNow: good.isSaleNow,
-            isWithPromoSale: isWithPromoSale_toReturn,
-            promocodeText: promocodeText_toReturn, 
-            promocodeType: promocodeType_toReturn
-            
-          };
-        } catch (error) {
-          console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
-          return null;
-        }
-      })
-    );
-
-           // Фильтруем null значения (если какие-то товары не найдены)
-    const filteredGoods = goodsWithDetails.filter((item) => item !== null);
-
-    // Рассчитываем общее количество товаров и общую сумму
-    const totalQty = filteredGoods.reduce((sum, item) => sum + item.qty, 0);
-    const totalPrice = filteredGoods.reduce(
-      (sum, item) => sum + Number(item.totalpriceItem),
-      0
-    );
-    const totalPriceWithPromo = filteredGoods.reduce(
-      (sum, item) => sum + Number(item.totalpriceItemWithPromo),
-      0
-    );
-
-     console.log('применили')
-
-     
-
-    return res.json({
-      status: 'ok',
-      goods: filteredGoods,
-      totalQty: totalQty,
-      valuteToShow: userValute,
-      totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
-      totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
-      textForUser: codeApplied[userLanguage]
-    });
-
+      return res.json({
+        status: 'ok',
+        goods: filteredGoods,
+        totalQty: totalQty,
+        valuteToShow: userValute,
+        totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
+        totalPriceCartWithPromocode: parseFloat(totalPriceWithPromo.toFixed(2)),
+        textForUser: codeApplied[userLanguage],
+      });
     }
-
   } catch (error) {
     console.error('[Error] Checking promocode:', error);
     console.error('[Error] Stack:', error.stack);
     res.status(500).json({
       status: 'error',
       message: 'Server error while checking promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3766,15 +3843,22 @@ app.post('/api/admin_update_personal_promocode', async (req, res) => {
       description_users_en,
       description_users_ru,
       expiryDate,
-      forFirstPurchase
+      forFirstPurchase,
     } = req.body;
 
     // Проверяем, что все обязательные поля заполнены
-    if (!id || !code || !description_admin || !description_users_de || 
-        !description_users_en || !description_users_ru || !expiryDate) {
+    if (
+      !id ||
+      !code ||
+      !description_admin ||
+      !description_users_de ||
+      !description_users_en ||
+      !description_users_ru ||
+      !expiryDate
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'All fields are required'
+        message: 'All fields are required',
       });
     }
 
@@ -3783,17 +3867,20 @@ app.post('/api/admin_update_personal_promocode', async (req, res) => {
     if (!existingPromocode) {
       return res.status(404).json({
         status: 'error',
-        message: 'Personal promocode not found'
+        message: 'Personal promocode not found',
       });
     }
 
     // Если код изменился, проверяем уникальность
     if (existingPromocode.code !== code) {
-      const codeExists = await PromocodesPersonalModel.findOne({ code: code, _id: { $ne: id } });
+      const codeExists = await PromocodesPersonalModel.findOne({
+        code: code,
+        _id: { $ne: id },
+      });
       if (codeExists) {
         return res.status(400).json({
           status: 'error',
-          message: 'Personal promocode with this code already exists'
+          message: 'Personal promocode with this code already exists',
         });
       }
     }
@@ -3808,7 +3895,7 @@ app.post('/api/admin_update_personal_promocode', async (req, res) => {
         description_users_en: description_users_en,
         description_users_ru: description_users_ru,
         expiryDate: new Date(expiryDate),
-        forFirstPurshase: forFirstPurchase || false
+        forFirstPurshase: forFirstPurchase || false,
       },
       { new: true }
     ).populate('tlgid', 'tlgid name');
@@ -3816,7 +3903,7 @@ app.post('/api/admin_update_personal_promocode', async (req, res) => {
     res.json({
       status: 'ok',
       message: 'Personal promocode updated successfully',
-      promocode: updatedPromocode
+      promocode: updatedPromocode,
     });
   } catch (error) {
     console.error('[Error] Updating personal promocode:', error);
@@ -3824,7 +3911,7 @@ app.post('/api/admin_update_personal_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while updating personal promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -3837,7 +3924,7 @@ app.post('/api/admin_deactivate_personal_promocode', async (req, res) => {
     if (!id) {
       return res.status(400).json({
         status: 'error',
-        message: 'Personal promocode ID is required'
+        message: 'Personal promocode ID is required',
       });
     }
 
@@ -3846,7 +3933,7 @@ app.post('/api/admin_deactivate_personal_promocode', async (req, res) => {
     if (!existingPromocode) {
       return res.status(404).json({
         status: 'error',
-        message: 'Personal promocode not found'
+        message: 'Personal promocode not found',
       });
     }
 
@@ -3860,9 +3947,9 @@ app.post('/api/admin_deactivate_personal_promocode', async (req, res) => {
     res.json({
       status: 'ok',
       message: 'Personal promocode deactivated successfully',
-      promocode: updatedPromocode
+      promocode: updatedPromocode,
     });
-    
+
     console.log('[Backend] Personal promocode deactivated:', updatedPromocode);
   } catch (error) {
     console.error('[Error] Deactivating personal promocode:', error);
@@ -3870,7 +3957,7 @@ app.post('/api/admin_deactivate_personal_promocode', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Server error while deactivating personal promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -4011,16 +4098,16 @@ app.get('/api/user_get_my_orders', async (req, res) => {
 app.get('/api/admin/orders', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    
+
     let query = {
-      payStatus: true  // Только оплаченные заказы
+      payStatus: true, // Только оплаченные заказы
     };
-    
+
     // Если переданы даты, фильтруем по периоду
     if (startDate && endDate) {
       query.createdAt = {
         $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $lte: new Date(endDate),
       };
     }
 
@@ -4033,38 +4120,38 @@ app.get('/api/admin/orders', async (req, res) => {
 
     // Обогащаем данные о заказах для админки
     const ordersWithDetails = orders.map((order) => {
-      const goodsWithDetails = order.goods
-        .map((item) => {
-          const good = item.itemId;
-          if (!good) {
-            // Если товар был удален, возвращаем базовую информацию
-            return {
-              ...item,
-              name_en: 'Deleted product',
-              name_de: 'Gelöschtes Produkt',
-              name_ru: 'Удаленный товар',
-              price_eu: item.actualPurchasePriceInEu || 0,
-              actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
-              delivery_price_de: 0,
-              delivery_price_inEu: 0,
-              delivery_price_outEu: 0,
-              file: { url: '/uploads/deleted-product.png' },
-            };
-          }
-
+      const goodsWithDetails = order.goods.map((item) => {
+        const good = item.itemId;
+        if (!good) {
+          // Если товар был удален, возвращаем базовую информацию
           return {
             ...item,
-            name_en: good.name_en,
-            name_de: good.name_de,
-            name_ru: good.name_ru,
-            price_eu: good.price_eu,
-            actualPurchasePriceInEu: item.actualPurchasePriceInEu || good.price_eu,
-            delivery_price_de: good.delivery_price_de,
-            delivery_price_inEu: good.delivery_price_inEu,
-            delivery_price_outEu: good.delivery_price_outEu,
-            file: good.file,
+            name_en: 'Deleted product',
+            name_de: 'Gelöschtes Produkt',
+            name_ru: 'Удаленный товар',
+            price_eu: item.actualPurchasePriceInEu || 0,
+            actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
+            delivery_price_de: 0,
+            delivery_price_inEu: 0,
+            delivery_price_outEu: 0,
+            file: { url: '/uploads/deleted-product.png' },
           };
-        });
+        }
+
+        return {
+          ...item,
+          name_en: good.name_en,
+          name_de: good.name_de,
+          name_ru: good.name_ru,
+          price_eu: good.price_eu,
+          actualPurchasePriceInEu:
+            item.actualPurchasePriceInEu || good.price_eu,
+          delivery_price_de: good.delivery_price_de,
+          delivery_price_inEu: good.delivery_price_inEu,
+          delivery_price_outEu: good.delivery_price_outEu,
+          file: good.file,
+        };
+      });
 
       // Рассчитываем общую стоимость заказа
       const totalAmount = goodsWithDetails.reduce((sum, item) => {
@@ -4133,38 +4220,38 @@ app.get('/api/admin_get_orders', async (req, res) => {
 
     // Обогащаем данные о заказах для админки
     const ordersWithDetails = orders.map((order) => {
-      const goodsWithDetails = order.goods
-        .map((item) => {
-          const good = item.itemId;
-          if (!good) {
-            // Если товар был удален, возвращаем базовую информацию
-            return {
-              ...item,
-              name_en: 'Deleted product',
-              name_de: 'Gelöschtes Produkt',
-              name_ru: 'Удаленный товар',
-              price_eu: item.actualPurchasePriceInEu || 0,
-              actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
-              delivery_price_de: 0,
-              delivery_price_inEu: 0,
-              delivery_price_outEu: 0,
-              file: { url: '/uploads/deleted-product.png' },
-            };
-          }
-
+      const goodsWithDetails = order.goods.map((item) => {
+        const good = item.itemId;
+        if (!good) {
+          // Если товар был удален, возвращаем базовую информацию
           return {
             ...item,
-            name_en: good.name_en,
-            name_de: good.name_de,
-            name_ru: good.name_ru,
-            price_eu: good.price_eu,
-            actualPurchasePriceInEu: item.actualPurchasePriceInEu || good.price_eu,
-            delivery_price_de: good.delivery_price_de,
-            delivery_price_inEu: good.delivery_price_inEu,
-            delivery_price_outEu: good.delivery_price_outEu,
-            file: good.file,
+            name_en: 'Deleted product',
+            name_de: 'Gelöschtes Produkt',
+            name_ru: 'Удаленный товар',
+            price_eu: item.actualPurchasePriceInEu || 0,
+            actualPurchasePriceInEu: item.actualPurchasePriceInEu || 0,
+            delivery_price_de: 0,
+            delivery_price_inEu: 0,
+            delivery_price_outEu: 0,
+            file: { url: '/uploads/deleted-product.png' },
           };
-        });
+        }
+
+        return {
+          ...item,
+          name_en: good.name_en,
+          name_de: good.name_de,
+          name_ru: good.name_ru,
+          price_eu: good.price_eu,
+          actualPurchasePriceInEu:
+            item.actualPurchasePriceInEu || good.price_eu,
+          delivery_price_de: good.delivery_price_de,
+          delivery_price_inEu: good.delivery_price_inEu,
+          delivery_price_outEu: good.delivery_price_outEu,
+          file: good.file,
+        };
+      });
 
       // Рассчитываем общую стоимость заказа
       const totalAmount = goodsWithDetails.reduce((sum, item) => {
@@ -4261,7 +4348,7 @@ app.post('/api/admin_update_order_status', async (req, res) => {
 
     // Подготавливаем объект для обновления
     const updateData = { orderStatus: statusId };
-    
+
     // Если передана eta, добавляем её в объект обновления
     if (eta !== undefined) {
       updateData.eta = eta;
@@ -4297,16 +4384,32 @@ app.post('/api/admin_update_order_status', async (req, res) => {
 // создать Stripe Checkout Session для оплаты
 app.post('/api/create_payment_session', async (req, res) => {
   try {
-    const { cart, deliveryInfo, totalSum, region, tlgid,typeLoyaltySystem, shouldBeCashbacked,cashbackValute  } = req.body;
+    const {
+      cart,
+      deliveryInfo,
+      totalSum,
+      region,
+      tlgid,
+      typeLoyaltySystem,
+      shouldBeCashbacked,
+      cashbackValute,
+    } = req.body;
 
-
-    if (!cart || !deliveryInfo || !totalSum || !tlgid || !typeLoyaltySystem || !shouldBeCashbacked, !cashbackValute) {
+    if (
+      (!cart ||
+        !deliveryInfo ||
+        !totalSum ||
+        !tlgid ||
+        !typeLoyaltySystem ||
+        !shouldBeCashbacked,
+      !cashbackValute)
+    ) {
       return res.status(400).json({
         status: 'error',
-        message: 'Cart, delivery info, total sum, tlgid and typeLoyaltySystem are required',
+        message:
+          'Cart, delivery info, total sum, tlgid and typeLoyaltySystem are required',
       });
     }
-
 
     // console.log('CAAART FOR CHECKING', cart)
     // return
@@ -4332,7 +4435,7 @@ app.post('/api/create_payment_session', async (req, res) => {
 
     console.log('lineItems', lineItems);
 
-    console.log('we are here 1')
+    console.log('we are here 1');
 
     // Создаем Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -4352,12 +4455,12 @@ app.post('/api/create_payment_session', async (req, res) => {
     // Получаем информацию о пользователе
     const user = await UserModel.findOneAndUpdate(
       { tlgid: Number(tlgid) },
-      { crmStatus: 3 }, 
+      { crmStatus: 3 },
       { new: true }
     );
-    
-    console.log('we are here 2')
-    
+
+    console.log('we are here 2');
+
     const jbid = user?.jbid;
 
     // Находим статус "new" или используем дефолтный
@@ -4373,7 +4476,7 @@ app.post('/api/create_payment_session', async (req, res) => {
       await defaultStatus.save();
     }
 
-    console.log('we are here 3')
+    console.log('we are here 3');
 
     // Создаем заказ с stripeSessionId, но payStatus=false до подтверждения
     const newOrder = new OrdersModel({
@@ -4387,7 +4490,7 @@ app.post('/api/create_payment_session', async (req, res) => {
         isPurchasedBySale: item.isSaleNow,
         isPurchasedByPromocode: item.isWithPromoSale,
         promocode: item.promocodeText,
-        promocodeType: item.promocodeType
+        promocodeType: item.promocodeType,
       })),
       country: deliveryInfo.selectedCountry.name_en,
       regionDelivery: region,
@@ -4399,102 +4502,98 @@ app.post('/api/create_payment_session', async (req, res) => {
       stripeSessionId: session.id, // Сохраняем session ID для webhook
       typeLoyaltySystem: typeLoyaltySystem,
       shouldBeCashbacked: shouldBeCashbacked,
-      cashbackValute:cashbackValute
-      
+      cashbackValute: cashbackValute,
     });
 
-    console.log('we are here 4')
+    console.log('we are here 4');
 
     // отправить данные в JB
-    const jbtoken = process.env.JB_TOKEN
-    const jburlSetTag = process.env.JB_URL_SET_TAG
-    const jburlDelTag = process.env.JB_URL_DEL_TAG
-    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+    const jbtoken = process.env.JB_TOKEN;
+    const jburlSetTag = process.env.JB_URL_SET_TAG;
+    const jburlDelTag = process.env.JB_URL_DEL_TAG;
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
     const bodySetTag = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "startPayingButNotPayed",
-    }
-    
+      name: 'startPayingButNotPayed',
+    };
+
     const bodyDelTag = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "addGoodToCartNotStartPaying",
-    }
-    
-    
+      name: 'addGoodToCartNotStartPaying',
+    };
+
     const bodyUpdateVar = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "context",
-      value: "series4_message1"
-    }
-    
+      name: 'context',
+      value: 'series4_message1',
+    };
+
     const bodyUpdateVar2 = {
       api_token: jbtoken,
       contact_id: jbid,
-      name: "crmStatus",
-      value: "3"
+      name: 'crmStatus',
+      value: '3',
+    };
+
+    const safeRequest = async (url, body, headers) => {
+      try {
+        return await axios.post(url, body, { headers });
+      } catch (error) {
+        console.error('Request failed:', error.message);
+        return null;
+      }
+    };
+
+    //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json',
+    });
+    await delay(500);
+
+    const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json',
+    });
+
+    if (response1 && response1.status >= 200 && response1.status < 300) {
+      console.log('response 1: данные в JB отправлены успешно');
+    } else {
+      console.error('response 1: ошибка отправки данных в JB');
     }
 
-
-    const safeRequest = async (url, body, headers) => {      
-    try {
-      return await axios.post(url, body, { headers });     
-    } catch (error) {
-      console.error('Request failed:', error.message);     
-      return null;
+    if (response2 && response2.status >= 200 && response2.status < 300) {
+      console.log('response 2: данные в JB отправлены успешно');
+    } else {
+      console.error('response 2: ошибка отправки данных в JB');
     }
-  };
 
+    if (response3 && response3.status >= 200 && response3.status < 300) {
+      console.log('response 3: данные в JB отправлены успешно');
+    } else {
+      console.error('response 3: ошибка отправки данных в JB');
+    }
 
-  //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
-
-  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-  const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response2 = await safeRequest(jburlDelTag, bodyDelTag, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-
-  const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-    'Content-Type': 'application/json' });
-  await delay(500);
-
-  const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-    'Content-Type': 'application/json' });
-
-  if (response1 && response1.status >= 200 && response1.status < 300 ) {
-            console.log('response 1: данные в JB отправлены успешно');
-  } else {
-            console.error('response 1: ошибка отправки данных в JB');
-  }
-
-  if (response2 && response2.status >= 200 && response2.status < 300 ) {
-            console.log('response 2: данные в JB отправлены успешно');
-  } else {
-            console.error('response 2: ошибка отправки данных в JB');
-  }
-
-  if (response3 && response3.status >= 200 && response3.status < 300 ) {
-            console.log('response 3: данные в JB отправлены успешно');
-  } else {
-            console.error('response 3: ошибка отправки данных в JB');
-  }
-
-  if (response4 && response4.status >= 200 && response4.status < 300 ) {
-            console.log('response 4: данные в JB отправлены успешно');
-  } else {
-            console.error('response 4: ошибка отправки данных в JB');
-  }
-
-
-
+    if (response4 && response4.status >= 200 && response4.status < 300) {
+      console.log('response 4: данные в JB отправлены успешно');
+    } else {
+      console.error('response 4: ошибка отправки данных в JB');
+    }
 
     await newOrder.save();
 
@@ -4750,8 +4849,8 @@ app.get('/api/get_receipt', async (req, res) => {
     }
 
     // Ищем чек в базе данных по payment_intent
-    const receipt = await ReceiptsModel.findOne({ 
-      payment_intent: payment_intent 
+    const receipt = await ReceiptsModel.findOne({
+      payment_intent: payment_intent,
     });
 
     if (!receipt) {
@@ -4761,11 +4860,10 @@ app.get('/api/get_receipt', async (req, res) => {
     }
 
     // Возвращаем URL чека
-    res.json({ 
-      status: 'ok', 
-      url: receipt.url 
+    res.json({
+      status: 'ok',
+      url: receipt.url,
     });
-
   } catch (error) {
     console.error('[Error] Get receipt error:', error);
     res.status(500).json({
@@ -4789,11 +4887,10 @@ app.get('/api/get_sale_info', async (req, res) => {
         .json({ status: 'error', message: 'Sale not found' });
     }
 
-    res.json({ 
-      status: 'ok', 
-      sale: sale 
+    res.json({
+      status: 'ok',
+      sale: sale,
     });
-
   } catch (error) {
     console.error('[Error] Get sale info error:', error);
     res.status(500).json({
@@ -4802,7 +4899,6 @@ app.get('/api/get_sale_info', async (req, res) => {
     });
   }
 });
-
 
 // получить список админов
 app.get('/api/admin_get_admins', async (req, res) => {
@@ -4821,34 +4917,34 @@ app.get('/api/admin_get_admins', async (req, res) => {
 app.post('/api/admin_add_admin', async (req, res) => {
   try {
     const { tlgid, name } = req.body;
-    
+
     // Проверка обязательных полей
     if (!tlgid || !name) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid and name are required'
+        error: 'tlgid and name are required',
       });
     }
-    
+
     // Проверка на существование админа с таким tlgid
     const existingAdmin = await AdminsListModel.findOne({ tlgid });
     if (existingAdmin) {
       return res.status(400).json({
         status: 'error',
-        error: 'Admin with this tlgid already exists'
+        error: 'Admin with this tlgid already exists',
       });
     }
-    
+
     const admin = new AdminsListModel({
       tlgid: Number(tlgid),
       name: name.trim(),
     });
 
     await admin.save();
-    
+
     res.json({
       status: 'ok',
-      admin: admin
+      admin: admin,
     });
   } catch (err) {
     console.log(err);
@@ -4863,24 +4959,27 @@ app.post('/api/admin_add_admin', async (req, res) => {
 app.post('/api/admin_update_admin', async (req, res) => {
   try {
     const { id, tlgid, name } = req.body;
-    
+
     // Проверка обязательных полей
     if (!id || !tlgid || !name) {
       return res.status(400).json({
         status: 'error',
-        error: 'id, tlgid and name are required'
+        error: 'id, tlgid and name are required',
       });
     }
-    
+
     // Проверка на существование другого админа с таким tlgid
-    const existingAdmin = await AdminsListModel.findOne({ tlgid, _id: { $ne: id } });
+    const existingAdmin = await AdminsListModel.findOne({
+      tlgid,
+      _id: { $ne: id },
+    });
     if (existingAdmin) {
       return res.status(400).json({
         status: 'error',
-        error: 'Admin with this tlgid already exists'
+        error: 'Admin with this tlgid already exists',
       });
     }
-    
+
     const updatedAdmin = await AdminsListModel.findByIdAndUpdate(
       id,
       {
@@ -4889,17 +4988,17 @@ app.post('/api/admin_update_admin', async (req, res) => {
       },
       { new: true }
     );
-    
+
     if (!updatedAdmin) {
       return res.status(404).json({
         status: 'error',
-        error: 'Admin not found'
+        error: 'Admin not found',
       });
     }
-    
+
     res.json({
       status: 'ok',
-      admin: updatedAdmin
+      admin: updatedAdmin,
     });
   } catch (err) {
     console.log(err);
@@ -4914,26 +5013,26 @@ app.post('/api/admin_update_admin', async (req, res) => {
 app.post('/api/admin_delete_admin', async (req, res) => {
   try {
     const { id } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         status: 'error',
-        error: 'id is required'
+        error: 'id is required',
       });
     }
-    
+
     const deletedAdmin = await AdminsListModel.findByIdAndDelete(id);
-    
+
     if (!deletedAdmin) {
       return res.status(404).json({
         status: 'error',
-        error: 'Admin not found'
+        error: 'Admin not found',
       });
     }
-    
+
     res.json({
       status: 'ok',
-      deletedAdmin: deletedAdmin
+      deletedAdmin: deletedAdmin,
     });
   } catch (err) {
     console.log(err);
@@ -4948,86 +5047,96 @@ app.post('/api/admin_delete_admin', async (req, res) => {
 app.post('/api/admin_send_message_to_all', async (req, res) => {
   try {
     const { message } = req.body;
-    
+
     if (!message || !message.trim()) {
       return res.status(400).json({
         status: 'error',
-        error: 'message is required'
+        error: 'message is required',
       });
     }
-    
+
     const result = await sendTlgMessageToAdmins(message.trim());
-    
+
     res.json({
       status: 'ok',
-      result: result
+      result: result,
     });
   } catch (err) {
     console.log(err);
     res.status(500).json({
       status: 'error',
       message: 'ошибка сервера',
-      error: err.message
+      error: err.message,
     });
   }
 });
 
-
-
-export async function sendTlgMessageToAdmins(messageText = 'New order is payed') {
+export async function sendTlgMessageToAdmins(
+  messageText = 'New order is payed'
+) {
   try {
     console.log('Начинаем отправку сообщения всем админам...');
-    
+
     // Получаем всех администраторов из БД
     const admins = await AdminsListModel.find();
     console.log(`Найдено админов: ${admins.length}`);
-    
+
     if (admins.length === 0) {
       console.log('Нет админов в базе данных');
       return { status: 'no_admins' };
     }
-    
+
     const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
     const successfulSends = [];
     const failedSends = [];
-    
+
     // Отправляем сообщение каждому админу
     for (const admin of admins) {
       try {
-        const params = `?chat_id=${admin.tlgid}&text=${encodeURIComponent(messageText)}`;
+        const params = `?chat_id=${admin.tlgid}&text=${encodeURIComponent(
+          messageText
+        )}`;
         const url = baseurl + params;
-        
+
         // console.log(`Отправляем сообщение админу ${admin.name} (${admin.tlgid})`);
-        
+
         const response = await axios.get(url);
-        
+
         if (response.data.ok) {
           // console.log(`✅ Сообщение успешно отправлено админу ${admin.name}`);
           successfulSends.push({ admin: admin.name, tlgid: admin.tlgid });
         } else {
-          throw new Error(`Telegram API вернул API error: ${response.data.description || 'Unknown error'}`);
+          throw new Error(
+            `Telegram API вернул API error: ${
+              response.data.description || 'Unknown error'
+            }`
+          );
         }
-        
       } catch (adminError) {
         // console.error(`❌ Ошибка при отправке админу ${admin.name} (${admin.tlgid}):`, adminError.message);
-        failedSends.push({ admin: admin.name, tlgid: admin.tlgid, error: adminError.message });
+        failedSends.push({
+          admin: admin.name,
+          tlgid: admin.tlgid,
+          error: adminError.message,
+        });
       }
-      
+
       // Небольшая задержка между отправками, чтобы не превысить rate limit
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    
-    console.log(`Результат отправки сообщений админам об оплаченном заказе: успешно - ${successfulSends.length}, ошибок - ${failedSends.length}`);
-    
-    return { 
+
+    console.log(
+      `Результат отправки сообщений админам об оплаченном заказе: успешно - ${successfulSends.length}, ошибок - ${failedSends.length}`
+    );
+
+    return {
       status: 'ok',
       totalAdmins: admins.length,
       successful: successfulSends.length,
       failed: failedSends.length,
       successfulSends,
-      failedSends
+      failedSends,
     };
-    
   } catch (err) {
     console.error('Ошибка в функции sendTlgMessageToAdmins:', err.message);
     console.error('Полная информация об ошибке:', err.response?.data);
@@ -5043,23 +5152,21 @@ app.post('/api/user_sendTlgMessage', async (req, res) => {
     if (!tlgid || !eta || !orderId) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid, eta and orderId are required'
+        error: 'tlgid, eta and orderId are required',
       });
     }
-    
+
     // console.log(`Отправка уведомления о доставке клиенту: tlgid=${tlgid}, eta=${eta}, orderId=${orderId}`);
-    
+
     // Получаем язык пользователя из БД
     const user = await UserModel.findOneAndUpdate(
       { tlgid: tlgid },
-      { crmStatus: 5,
-        isWaitingAdminAction: false
-       }
+      { crmStatus: 5, isWaitingAdminAction: false }
     );
     const language = user?.language || 'en'; // По умолчанию английский
-    
+
     console.log(`Пользователь найден, язык: ${language}`);
-    
+
     // Форматируем дату в формат dd.mm.yy
     const formatDate = (dateString) => {
       const date = new Date(dateString);
@@ -5068,69 +5175,69 @@ app.post('/api/user_sendTlgMessage', async (req, res) => {
       const year = String(date.getFullYear()).slice(-2);
       return `${day}.${month}.${year}`;
     };
-    
+
     const formattedEta = formatDate(eta);
-    
+
     const templateText = {
       de: `🚚 Ihre Bestellung ist unterwegs!\n\nVoraussichtliches Lieferdatum: ${formattedEta}\n\nVielen Dank für Ihren Einkauf!`,
       en: `🚚 Your order is on the way!\n\nEstimated delivery date: ${formattedEta}\n\nThank you for your purchase!`,
-      ru: `🚚 Ваш заказ отправлен!\n\nПримерная дата доставки: ${formattedEta}\n\nСпасибо за покупку!`
+      ru: `🚚 Ваш заказ отправлен!\n\nПримерная дата доставки: ${formattedEta}\n\nСпасибо за покупку!`,
     };
-    
+
     const messageText = templateText[language] || templateText['en'];
-    
+
     // Отправляем сообщение через Telegram Bot API
     const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
     const params = `?chat_id=${tlgid}&text=${encodeURIComponent(messageText)}`;
     const url = baseurl + params;
-    
+
     const response = await axios.get(url);
-    
+
     if (!response.data.ok) {
-      throw new Error(`Telegram API error: ${response.data.description || 'Unknown error'}`);
+      throw new Error(
+        `Telegram API error: ${response.data.description || 'Unknown error'}`
+      );
     }
-    
+
     console.log('Сообщение успешно отправлено клиенту');
-    
+
     // Обновляем статус отправки в БД
     const updatedOrder = await OrdersModel.findByIdAndUpdate(
       orderId,
       { messageToClientAboutDelivery: true },
       { new: true }
     );
-    
+
     if (!updatedOrder) {
       return res.status(404).json({
         status: 'error',
-        error: 'Order not found'
+        error: 'Order not found',
       });
     }
-    
+
     // console.log(`Обновлен статус messageToClientAboutDelivery для заказа ${orderId}`);
-    
+
     res.json({
       status: 'ok',
       message: 'Message sent successfully',
-      order: updatedOrder
+      order: updatedOrder,
     });
-    
   } catch (err) {
     console.error('Ошибка в endpoint user_sendTlgMessage:', err.message);
     console.error('Полная информация об ошибке:', err.response?.data);
-    
+
     res.status(500).json({
       status: 'error',
-      error: err.message
+      error: err.message,
     });
   }
 });
-
 
 // Проверка использования фильтра в товарах
 app.post('/api/admin_check_filter_usage', async (req, res) => {
   try {
     const { filterId } = req.body;
-    
+
     if (!filterId) {
       return res.status(400).json({
         error: 'Filter ID is required',
@@ -5138,14 +5245,14 @@ app.post('/api/admin_check_filter_usage', async (req, res) => {
     }
 
     console.log('[Database] Checking filter usage for ID:', filterId);
-    
+
     // Ищем товары с этим типом (фильтром)
     const goodsWithFilter = await GoodsModel.find({ type: filterId });
-    
+
     res.json({
       status: 'ok',
       isUsed: goodsWithFilter.length > 0,
-      goodsCount: goodsWithFilter.length
+      goodsCount: goodsWithFilter.length,
     });
   } catch (error) {
     console.error('[Error] Failed to check filter usage:', error);
@@ -5160,7 +5267,7 @@ app.post('/api/admin_check_filter_usage', async (req, res) => {
 app.post('/api/admin_delete_filter', async (req, res) => {
   try {
     const { id } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({
         error: 'Filter ID is required',
@@ -5168,9 +5275,9 @@ app.post('/api/admin_delete_filter', async (req, res) => {
     }
 
     console.log('[Database] Deleting filter with ID:', id);
-    
+
     const result = await GoodsTypesModel.findByIdAndDelete(id);
-    
+
     if (!result) {
       return res.status(404).json({
         error: 'Filter not found',
@@ -5178,11 +5285,11 @@ app.post('/api/admin_delete_filter', async (req, res) => {
     }
 
     console.log('[Database] Filter deleted successfully:', result.name_en);
-    
+
     res.json({
       status: 'ok',
       message: 'Filter deleted successfully',
-      deletedFilter: result
+      deletedFilter: result,
     });
   } catch (error) {
     console.error('[Error] Failed to delete filter:', error);
@@ -5201,7 +5308,7 @@ app.get('/api/user_get_personal_promocodes', async (req, res) => {
     if (!tlgid) {
       return res.status(400).json({
         status: 'error',
-        message: 'tlgid is required'
+        message: 'tlgid is required',
       });
     }
 
@@ -5210,27 +5317,27 @@ app.get('/api/user_get_personal_promocodes', async (req, res) => {
     if (!user) {
       return res.status(404).json({
         status: 'error',
-        message: 'User not found'
+        message: 'User not found',
       });
     }
 
     // Получаем персональные промокоды пользователя
-    const personalPromocodes = await PromocodesPersonalModel.find({ 
+    const personalPromocodes = await PromocodesPersonalModel.find({
       tlgid: user._id,
       isActive: true,
-      isUsed: false
+      isUsed: false,
     }).sort({ createdAt: -1 });
 
     res.json({
       status: 'ok',
-      promocodes: personalPromocodes
+      promocodes: personalPromocodes,
     });
   } catch (error) {
     console.error('[Error] Getting user personal promocodes:', error);
     res.status(500).json({
       status: 'error',
       message: 'Server error while getting personal promocodes',
-      error: error.message
+      error: error.message,
     });
   }
 });
@@ -5238,21 +5345,17 @@ app.get('/api/user_get_personal_promocodes', async (req, res) => {
 // создать пароль для входа админа
 app.post('/api/create_passw', async (req, res) => {
   try {
-    
-    const { login, password } = req.body
+    const { login, password } = req.body;
 
     const doc = new AdminPasswordModel({
       login: login,
       password: password,
-     
     });
     await doc.save();
-    
-    if (doc){
-      return res.json({ status:'created' });
 
+    if (doc) {
+      return res.json({ status: 'created' });
     }
-
   } catch (err) {
     console.log(err);
     res.status(500).json({
@@ -5269,7 +5372,7 @@ app.post('/api/admin_login', async (req, res) => {
     // Валидация входных данных
     if (!login || !password) {
       return res.status(400).json({
-        error: 'Login and password are required'
+        error: 'Login and password are required',
       });
     }
 
@@ -5281,7 +5384,7 @@ app.post('/api/admin_login', async (req, res) => {
     if (!admin) {
       console.log('[Auth] Admin not found:', login);
       return res.status(401).json({
-        error: 'Invalid login or password'
+        error: 'Invalid login or password',
       });
     }
 
@@ -5289,30 +5392,26 @@ app.post('/api/admin_login', async (req, res) => {
     if (admin.password !== password.trim()) {
       console.log('[Auth] Invalid password for admin:', login);
       return res.status(401).json({
-        error: 'Invalid login or password'
+        error: 'Invalid login or password',
       });
     }
 
     console.log('[Auth] Admin login successful:', login);
-    
+
     res.json({
       status: 'success',
-      message: 'Login successful'
+      message: 'Login successful',
     });
-
   } catch (err) {
     console.error('[Error] Admin login error:', err);
     res.status(500).json({
       error: 'Server error',
-      details: err.message
+      details: err.message,
     });
   }
 });
 
-
-
-
-// списать баллы при покупке 
+// списать баллы при покупке
 app.post('/api/writeoff_cashback', async (req, res) => {
   try {
     const { cashbackValue, userId } = req.body;
@@ -5320,51 +5419,46 @@ app.post('/api/writeoff_cashback', async (req, res) => {
     if (!cashbackValue && !userId) {
       return res.status(400).json({
         status: 'error',
-        message: 'Promocode and user is required'
+        message: 'Promocode and user is required',
       });
     }
-       
+
     const user = await UserModel.findOne({ tlgid: userId });
     const userValute = user.valute;
-    const userLanguage = user.language
+    const userLanguage = user.language;
 
-
-     const codeApplied = {
+    const codeApplied = {
       de: 'cashback-punkte wurden angewendet',
       en: 'cashback points were applied',
-      ru: 'баллов списано'
-     }
-
+      ru: 'баллов списано',
+    };
 
     const cart = await CartsModel.findOne({ tlgid: userId }).lean();
-    
+
     const exchangeRates = await currencyConverter();
 
     // Подсчитываем количество товаров с isSaleNow = false
     let countItemsWithoutSale = 0;
-    
+
     for (const item of cart.goods) {
-      const good = await
-    GoodsModel.findById(item.itemId);
+      const good = await GoodsModel.findById(item.itemId);
       if (good && good.isSaleNow === false) {
-        countItemsWithoutSale = countItemsWithoutSale + item.qty
+        countItemsWithoutSale = countItemsWithoutSale + item.qty;
       }
     }
 
-    const writeOffFromEachItem = Number((cashbackValue/countItemsWithoutSale).toFixed(2))
-    const writeOffFromEachItem_inEu = writeOffFromEachItem / exchangeRates[userValute]
+    const writeOffFromEachItem = Number(
+      (cashbackValue / countItemsWithoutSale).toFixed(2)
+    );
+    const writeOffFromEachItem_inEu =
+      writeOffFromEachItem / exchangeRates[userValute];
 
+    console.log('countItemsWithoutSale', countItemsWithoutSale);
+    console.log('writeOffFromEachItem', writeOffFromEachItem);
+    console.log('writeOffFromEachItem_inEu', writeOffFromEachItem_inEu);
 
-
-    console.log('countItemsWithoutSale',countItemsWithoutSale)
-    console.log('writeOffFromEachItem',writeOffFromEachItem)
-    console.log('writeOffFromEachItem_inEu',writeOffFromEachItem_inEu)
-    
     // return
-    
-          
-    
-    
+
     const goodsWithDetails = await Promise.all(
       cart.goods.map(async (item) => {
         try {
@@ -5395,20 +5489,27 @@ app.post('/api/writeoff_cashback', async (req, res) => {
           ).toFixed(2);
 
           // если товар продается без скидки
-          let price_eu_toReturn = (itemPrice - writeOffFromEachItem_inEu).toFixed(2)
-          let priceToShow_toReturn = (Number(convertedPrice) - writeOffFromEachItem).toFixed(2)
-          let isWithCashbackSale_toReturn = true
-          let totalpriceItemWithCashback_toReturn = ((Number(convertedPrice) - writeOffFromEachItem)*itemQty).toFixed(2)
-
+          let price_eu_toReturn = (
+            itemPrice - writeOffFromEachItem_inEu
+          ).toFixed(2);
+          let priceToShow_toReturn = (
+            Number(convertedPrice) - writeOffFromEachItem
+          ).toFixed(2);
+          let isWithCashbackSale_toReturn = true;
+          let totalpriceItemWithCashback_toReturn = (
+            (Number(convertedPrice) - writeOffFromEachItem) *
+            itemQty
+          ).toFixed(2);
 
           // если товар продается уже по скидке
-          if (good.isSaleNow){
-            price_eu_toReturn = itemPrice.toFixed(2)
-            priceToShow_toReturn = convertedPrice
-            isWithCashbackSale_toReturn = false
-            totalpriceItemWithCashback_toReturn = (convertedPrice * itemQty).toFixed(2)
+          if (good.isSaleNow) {
+            price_eu_toReturn = itemPrice.toFixed(2);
+            priceToShow_toReturn = convertedPrice;
+            isWithCashbackSale_toReturn = false;
+            totalpriceItemWithCashback_toReturn = (
+              convertedPrice * itemQty
+            ).toFixed(2);
           }
-
 
           return {
             name_en: good.name_en,
@@ -5432,8 +5533,6 @@ app.post('/api/writeoff_cashback', async (req, res) => {
             valuteToShow: userValute,
             isSaleNow: good.isSaleNow,
             isWithCashbackSale: isWithCashbackSale_toReturn,
-            
-            
           };
         } catch (error) {
           console.error(`Ошибка при загрузке товара ${item.itemId}:`, error);
@@ -5442,7 +5541,7 @@ app.post('/api/writeoff_cashback', async (req, res) => {
       })
     );
 
-           // Фильтруем null значения (если какие-то товары не найдены)
+    // Фильтруем null значения (если какие-то товары не найдены)
     const filteredGoods = goodsWithDetails.filter((item) => item !== null);
 
     // Рассчитываем общее количество товаров и общую сумму
@@ -5456,8 +5555,6 @@ app.post('/api/writeoff_cashback', async (req, res) => {
       0
     );
 
-    
-
     return res.json({
       status: 'ok',
       goods: filteredGoods,
@@ -5465,92 +5562,76 @@ app.post('/api/writeoff_cashback', async (req, res) => {
       valuteToShow: userValute,
       totalPriceCart: parseFloat(totalPrice.toFixed(2)), // Округляем до 2 знаков после запятой
       totalPriceCartWithCashback: parseFloat(totalPriceWithCashback.toFixed(2)),
-      textForUser: `${cashbackValue} ${codeApplied[userLanguage]}`
+      textForUser: `${cashbackValue} ${codeApplied[userLanguage]}`,
     });
-
-    
-
-    
-
   } catch (error) {
     console.error('[Error] Checking promocode:', error);
     console.error('[Error] Stack:', error.stack);
     res.status(500).json({
       status: 'error',
       message: 'Server error while checking promocode',
-      error: error.message
+      error: error.message,
     });
   }
 });
 
-
 app.post('/api/create_new_referalPair', async (req, res) => {
+  try {
+    console.log('запрос на реферальную пару пришел!!!');
 
-try {
+    const { father, son, username } = req.body;
 
-  console.log('запрос на реферальную пару пришел!!!')
+    console.log('father = ', father);
+    console.log('son = ', son);
+    console.log('username = ', username);
 
-  const { father, son, username } = req.body
-
-  console.log('father = ',father)
-  console.log('son = ',son)
-  console.log('username = ',username)
-
-  const doc = new ReferalsModel({
-      father:father,
-      son:son,
-      username: username
+    const doc = new ReferalsModel({
+      father: father,
+      son: son,
+      username: username,
     });
 
-    console.log('doc=',doc)
+    console.log('doc=', doc);
 
     await doc.save();
 
-    res.status(200).json({result: 'created'})
-
-} catch (error) {
+    res.status(200).json({ result: 'created' });
+  } catch (error) {
     console.error('[Error] creating ref pair:', error);
     res.status(500).json({
       status: 'error',
       message: 'Server error creating ref pair',
-      error: error.message
+      error: error.message,
     });
   }
-
-})
+});
 
 // Получение рефералов
 app.get('/api/get_referals', async (req, res) => {
   try {
     const { father, isSonEnterToApp } = req.query;
-    
+
     console.log('Получение рефералов для father:', father);
-    
+
     const query = { father: father };
     if (isSonEnterToApp === 'true') {
       query.isSonEnterToApp = true;
     }
-    
+
     const referals = await ReferalsModel.find(query);
-    
+
     res.status(200).json({
       status: 'ok',
-      referals: referals
+      referals: referals,
     });
-    
   } catch (error) {
     console.error('Ошибка при получении рефералов:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Ошибка при получении рефералов'
+      message: 'Ошибка при получении рефералов',
     });
   }
 });
-
-
-
-
-
 
 // === REFERALS PROMO FOR QUANTITY ENDPOINTS ===
 
@@ -5558,13 +5639,13 @@ app.get('/api/get_referals', async (req, res) => {
 app.get('/api/referals_promoForQuantity', async (req, res) => {
   try {
     const items = await ReferalsPromoForQuantityModel.find().sort({ qty: 1 });
-    
+
     res.status(200).json(items);
   } catch (error) {
     console.error('Ошибка при получении referals_promoForQuantity:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Ошибка при получении данных'
+      message: 'Ошибка при получении данных',
     });
   }
 });
@@ -5573,34 +5654,34 @@ app.get('/api/referals_promoForQuantity', async (req, res) => {
 app.post('/api/referals_promoForQuantity', async (req, res) => {
   try {
     const { qty, sale, description } = req.body;
-    
+
     console.log('Received data:', { qty, sale, description });
-    
+
     // Валидация
     if (!qty || !sale || !description) {
       return res.status(400).json({
         status: 'error',
-        error: 'All fields are required'
+        error: 'All fields are required',
       });
     }
-    
+
     const newItem = new ReferalsPromoForQuantityModel({
       qty: qty,
       sale: sale,
-      description: description
+      description: description,
     });
-    
+
     await newItem.save();
-    
+
     res.status(200).json({
       status: 'ok',
-      item: newItem
+      item: newItem,
     });
   } catch (error) {
     console.error('Ошибка при создании referals_promoForQuantity:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при создании записи'
+      error: 'Ошибка при создании записи',
     });
   }
 });
@@ -5610,37 +5691,37 @@ app.put('/api/referals_promoForQuantity/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { qty, sale, description } = req.body;
-    
+
     // Валидация
     if (!qty || !sale || !description) {
       return res.status(400).json({
         status: 'error',
-        error: 'All fields are required'
+        error: 'All fields are required',
       });
     }
-    
+
     const updatedItem = await ReferalsPromoForQuantityModel.findByIdAndUpdate(
       id,
       { qty, sale, description },
       { new: true }
     );
-    
+
     if (!updatedItem) {
       return res.status(404).json({
         status: 'error',
-        error: 'Item not found'
+        error: 'Item not found',
       });
     }
-    
+
     res.status(200).json({
       status: 'ok',
-      item: updatedItem
+      item: updatedItem,
     });
   } catch (error) {
     console.error('Ошибка при обновлении referals_promoForQuantity:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при обновлении записи'
+      error: 'Ошибка при обновлении записи',
     });
   }
 });
@@ -5649,25 +5730,27 @@ app.put('/api/referals_promoForQuantity/:id', async (req, res) => {
 app.delete('/api/referals_promoForQuantity/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const deletedItem = await ReferalsPromoForQuantityModel.findByIdAndDelete(id);
-    
+
+    const deletedItem = await ReferalsPromoForQuantityModel.findByIdAndDelete(
+      id
+    );
+
     if (!deletedItem) {
       return res.status(404).json({
         status: 'error',
-        error: 'Item not found'
+        error: 'Item not found',
       });
     }
-    
+
     res.status(200).json({
       status: 'ok',
-      deletedItem: deletedItem
+      deletedItem: deletedItem,
     });
   } catch (error) {
     console.error('Ошибка при удалении referals_promoForQuantity:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при удалении записи'
+      error: 'Ошибка при удалении записи',
     });
   }
 });
@@ -5675,14 +5758,16 @@ app.delete('/api/referals_promoForQuantity/:id', async (req, res) => {
 // GET - получение всех записей referals_promoForPurchase
 app.get('/api/referals_promoForPurchase', async (req, res) => {
   try {
-    const items = await ReferalsPromoForPurchaseModel.find().sort({ createdAt: -1 });
+    const items = await ReferalsPromoForPurchaseModel.find().sort({
+      createdAt: -1,
+    });
 
     res.status(200).json(items);
   } catch (error) {
     console.error('Ошибка при получении referals_promoForPurchase:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Ошибка при получении данных'
+      message: 'Ошибка при получении данных',
     });
   }
 });
@@ -5692,33 +5777,37 @@ app.post('/api/referals_promoForPurchase', async (req, res) => {
   try {
     const { purchaseAmount, sale, description } = req.body;
 
-    console.log('Received purchase data:', { purchaseAmount, sale, description });
+    console.log('Received purchase data:', {
+      purchaseAmount,
+      sale,
+      description,
+    });
 
     // Валидация
     if (!purchaseAmount || !sale || !description) {
       return res.status(400).json({
         status: 'error',
-        error: 'All fields are required'
+        error: 'All fields are required',
       });
     }
 
     const newItem = new ReferalsPromoForPurchaseModel({
       purchaseAmount: purchaseAmount,
       sale: sale,
-      description: description
+      description: description,
     });
 
     await newItem.save();
 
     res.status(200).json({
       status: 'ok',
-      item: newItem
+      item: newItem,
     });
   } catch (error) {
     console.error('Ошибка при создании referals_promoForPurchase:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при создании записи'
+      error: 'Ошибка при создании записи',
     });
   }
 });
@@ -5729,13 +5818,13 @@ app.put('/api/referals_promoForPurchase/:id', async (req, res) => {
     const { id } = req.params;
     const { sale } = req.body;
 
-    console.log('sale=', sale)
+    console.log('sale=', sale);
 
     // Валидация
     if (typeof sale !== 'number' || sale < 0) {
       return res.status(400).json({
         status: 'error',
-        error: 'Sale field is required and must be 0 or positive number'
+        error: 'Sale field is required and must be 0 or positive number',
       });
     }
 
@@ -5748,19 +5837,19 @@ app.put('/api/referals_promoForPurchase/:id', async (req, res) => {
     if (!updatedItem) {
       return res.status(404).json({
         status: 'error',
-        error: 'Item not found'
+        error: 'Item not found',
       });
     }
 
     res.status(200).json({
       status: 'ok',
-      item: updatedItem
+      item: updatedItem,
     });
   } catch (error) {
     console.error('Ошибка при обновлении referals_promoForPurchase:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при обновлении записи'
+      error: 'Ошибка при обновлении записи',
     });
   }
 });
@@ -5770,24 +5859,26 @@ app.delete('/api/referals_promoForPurchase/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletedItem = await ReferalsPromoForPurchaseModel.findByIdAndDelete(id);
+    const deletedItem = await ReferalsPromoForPurchaseModel.findByIdAndDelete(
+      id
+    );
 
     if (!deletedItem) {
       return res.status(404).json({
         status: 'error',
-        error: 'Item not found'
+        error: 'Item not found',
       });
     }
 
     res.status(200).json({
       status: 'ok',
-      deletedItem: deletedItem
+      deletedItem: deletedItem,
     });
   } catch (error) {
     console.error('Ошибка при удалении referals_promoForPurchase:', error);
     res.status(500).json({
       status: 'error',
-      error: 'Ошибка при удалении записи'
+      error: 'Ошибка при удалении записи',
     });
   }
 });
@@ -5797,22 +5888,29 @@ app.post('/api/admin_update_waiting_status', async (req, res) => {
   try {
     const { userId, isWaitingAdminAction } = req.body;
 
-
-
-    console.log('admin_update_waiting_status | userId=', userId, ' isWaitingAdminAction=', isWaitingAdminAction);
+    console.log(
+      'admin_update_waiting_status | userId=',
+      userId,
+      ' isWaitingAdminAction=',
+      isWaitingAdminAction
+    );
 
     // Валидация
-    if (!userId || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+    if (
+      !userId ||
+      isWaitingAdminAction === undefined ||
+      isWaitingAdminAction === null
+    ) {
       return res.status(400).json({
         status: 'error',
-        error: 'userId and isWaitingAdminAction are required'
+        error: 'userId and isWaitingAdminAction are required',
       });
     }
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       {
-        isWaitingAdminAction: isWaitingAdminAction
+        isWaitingAdminAction: isWaitingAdminAction,
       },
       { new: true }
     );
@@ -5820,19 +5918,19 @@ app.post('/api/admin_update_waiting_status', async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({
         status: 'error',
-        error: 'User not found'
+        error: 'User not found',
       });
     }
 
     res.status(200).json({
       status: 'ok',
-      user: updatedUser
+      user: updatedUser,
     });
   } catch (error) {
     console.error('Ошибка при изменении параметра isWaitingAdminAction', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при изменении записи'
+      error: 'Ошибка при изменении записи',
     });
   }
 });
@@ -5848,7 +5946,7 @@ app.get('/api/admin_get_user_orders/:tlgid', async (req, res) => {
     if (!tlgid) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid is required'
+        error: 'tlgid is required',
       });
     }
 
@@ -5859,13 +5957,13 @@ app.get('/api/admin_get_user_orders/:tlgid', async (req, res) => {
 
     res.status(200).json({
       status: 'ok',
-      orders: orders
+      orders: orders,
     });
   } catch (error) {
     console.error('Ошибка при получении заказов пользователя', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при получении заказов'
+      error: 'Ошибка при получении заказов',
     });
   }
 });
@@ -5875,13 +5973,26 @@ app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
   try {
     const { userId, newCrmStatus, isWaitingAdminAction, order } = req.body;
 
-    console.log('admin_move_user_to_next_stage 6 | userId=', userId, ' order=', order );
+    console.log(
+      'admin_move_user_to_next_stage 6 | userId=',
+      userId,
+      ' order=',
+      order
+    );
 
     // Валидация
-    if (!userId || !order  || newCrmStatus === undefined || newCrmStatus === null || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+    if (
+      !userId ||
+      !order ||
+      newCrmStatus === undefined ||
+      newCrmStatus === null ||
+      isWaitingAdminAction === undefined ||
+      isWaitingAdminAction === null
+    ) {
       return res.status(400).json({
         status: 'error',
-        error: 'userId, order, newCrmStatus and isWaitingAdminAction are required'
+        error:
+          'userId, order, newCrmStatus and isWaitingAdminAction are required',
       });
     }
 
@@ -5889,7 +6000,7 @@ app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
       userId,
       {
         crmStatus: newCrmStatus,
-        isWaitingAdminAction: isWaitingAdminAction
+        isWaitingAdminAction: isWaitingAdminAction,
       },
       { new: true }
     );
@@ -5897,12 +6008,12 @@ app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({
         status: 'error',
-        error: 'User not found'
+        error: 'User not found',
       });
     }
 
     const updatedOrder = await OrdersModel.findByIdAndUpdate(
-      {_id: order},
+      { _id: order },
       { orderStatus: '689b8af622baabcbb7047b9e' },
       { new: true }
     );
@@ -5910,105 +6021,94 @@ app.post('/api/admin_move_user_to_next_stage', async (req, res) => {
     if (!updatedOrder) {
       return res.status(404).json({
         status: 'error',
-        error: 'Order not found'
+        error: 'Order not found',
       });
     }
 
-
-    const jbid = updatedOrder.jbid
-
+    const jbid = updatedOrder.jbid;
 
     // отправить данные в JB
-            const jbtoken = process.env.JB_TOKEN
-            const jburlSetTag = process.env.JB_URL_SET_TAG
-            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+    const jbtoken = process.env.JB_TOKEN;
+    const jburlSetTag = process.env.JB_URL_SET_TAG;
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
-            const bodySetTag = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "thanksMailing"
-            }
-  
-            const bodyUpdateVar = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "context",
-              value: "series5_message1"
-            }
+    const bodySetTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'thanksMailing',
+    };
 
-            const bodyUpdateVar2 = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "crmStatus",
-              value: "6"
-            }
+    const bodyUpdateVar = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'context',
+      value: 'series5_message1',
+    };
 
-    
+    const bodyUpdateVar2 = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'crmStatus',
+      value: '6',
+    };
 
-            const safeRequest = async (url, body, headers) => {      
-            try {
-              return await axios.post(url, body, { headers });     
-            } catch (error) {
-              console.error('Request failed:', error.message);     
-              return null;
-            }
-          };
+    const safeRequest = async (url, body, headers) => {
+      try {
+        return await axios.post(url, body, { headers });
+      } catch (error) {
+        console.error('Request failed:', error.message);
+        return null;
+      }
+    };
 
+    //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
 
-        //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-          const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(1000);
 
-          const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-            'Content-Type': 'application/json' });
-          await delay(1000);
+    const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json',
+    });
+    await delay(1000);
 
-          const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-            'Content-Type': 'application/json' });
-          await delay(1000);
-          
-          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-            'Content-Type': 'application/json' });
+    const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json',
+    });
 
+    if (response1 && response1.status >= 200 && response1.status < 300) {
+      console.log('response 1: данные в JB отправлены успешно');
+    } else {
+      console.error('response 1: ошибка отправки данных в JB');
+    }
 
-          if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
+    if (response2 && response2.status >= 200 && response2.status < 300) {
+      console.log('response 2: данные в JB отправлены успешно');
+    } else {
+      console.error('response 2: ошибка отправки данных в JB');
+    }
 
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-
-
-
-
-
-
-
-
-
-
-
+    if (response3 && response3.status >= 200 && response3.status < 300) {
+      console.log('response 3: данные в JB отправлены успешно');
+    } else {
+      console.error('response 3: ошибка отправки данных в JB');
+    }
 
     res.status(200).json({
       status: 'ok',
-      user: updatedUser
+      user: updatedUser,
     });
   } catch (error) {
-    console.error('Ошибка при перемещении пользователя на следующий этап', error);
+    console.error(
+      'Ошибка при перемещении пользователя на следующий этап',
+      error
+    );
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при изменении записи'
+      error: 'Ошибка при изменении записи',
     });
   }
 });
@@ -6018,23 +6118,23 @@ app.post('/api/change_crmstatus', async (req, res) => {
   try {
     const { tlgid, crmstatus } = req.body;
 
-    console.log('get from jb | tlgid=',tlgid, ' crmstatus=',crmstatus)
+    console.log('get from jb | tlgid=', tlgid, ' crmstatus=', crmstatus);
 
     // Валидация
     if (!tlgid || crmstatus === undefined || crmstatus === null) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid and crmStatus are required'
+        error: 'tlgid and crmStatus are required',
       });
     }
 
-          const updatedUser = await UserModel.findOneAndUpdate(
-            { tlgid: tlgid }, 
-            {
-              crmStatus: crmstatus
-            },
-            { new: true } 
-          );
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { tlgid: tlgid },
+      {
+        crmStatus: crmstatus,
+      },
+      { new: true }
+    );
 
     res.status(200).json({
       status: 'changed',
@@ -6043,145 +6143,140 @@ app.post('/api/change_crmstatus', async (req, res) => {
     console.error('Ошибка при изменении статуса crmStatus', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при изменении записи'
+      error: 'Ошибка при изменении записи',
     });
   }
 });
-
-
 
 // изменить инфо в Order (из JB)
 app.post('/api/change_orderInfo', async (req, res) => {
   try {
     const { tlgid, orderid } = req.body;
 
-    console.log('get from app | tlgid=',tlgid, ' orderid=',orderid)
+    console.log('get from app | tlgid=', tlgid, ' orderid=', orderid);
 
     // Валидация
-    if (!tlgid || !orderid ) {
+    if (!tlgid || !orderid) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid and orderid are required'
+        error: 'tlgid and orderid are required',
       });
     }
 
-          let jbid
+    let jbid;
 
-            try {
-            const resUser = await UserModel.findOneAndUpdate(
-            { tlgid: tlgid }, 
-            {
-              crmStatus: 6,
-              isWaitingAdminAction: false
-            },
-            { new: true } 
-          );
+    try {
+      const resUser = await UserModel.findOneAndUpdate(
+        { tlgid: tlgid },
+        {
+          crmStatus: 6,
+          isWaitingAdminAction: false,
+        },
+        { new: true }
+      );
 
-            jbid = resUser.jbid
-            console.log('jbid from user changes=',  jbid)
+      jbid = resUser.jbid;
+      console.log('jbid from user changes=', jbid);
 
-             console.log('Обновил юзера успешно:', resUser);  
-          } catch(error) {
-            console.error('Ошибка обновления юзера:', error);
-          }
+      console.log('Обновил юзера успешно:', resUser);
+    } catch (error) {
+      console.error('Ошибка обновления юзера:', error);
+    }
 
-          try {
-              const resOrder = await
-              OrdersModel.findOneAndUpdate(
-                {_id: orderid},
-                { orderStatus: '689b8af622baabcbb7047b9e',
-                  isUserConfirmDelivery: true
-                 },      
-                { new: true }
-              );
+    try {
+      const resOrder = await OrdersModel.findOneAndUpdate(
+        { _id: orderid },
+        {
+          orderStatus: '689b8af622baabcbb7047b9e',
+          isUserConfirmDelivery: true,
+        },
+        { new: true }
+      );
 
-              console.log('Обновлено order успешно:', resOrder);        
-            } catch (error) {
-              console.error('Ошибка обновления order:', error);
-            }
+      console.log('Обновлено order успешно:', resOrder);
+    } catch (error) {
+      console.error('Ошибка обновления order:', error);
+    }
 
+    console.log('jbid from before send to api jb=', jbid);
 
-            console.log('jbid from before send to api jb=',  jbid)  
+    // отправить данные в JB
+    const jbtoken = process.env.JB_TOKEN;
+    const jburlSetTag = process.env.JB_URL_SET_TAG;
+    const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR;
 
-            // отправить данные в JB
-            const jbtoken = process.env.JB_TOKEN
-            const jburlSetTag = process.env.JB_URL_SET_TAG
-            const jburlUpdateVar = process.env.JB_URL_UPDATE_VAR
+    const bodySetTag = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'thanksMailing',
+    };
 
-            const bodySetTag = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "thanksMailing"
-            }
-  
-            const bodyUpdateVar = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "context",
-              value: "series5_message1"
-            }
+    const bodyUpdateVar = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'context',
+      value: 'series5_message1',
+    };
 
-            const bodyUpdateVar2 = {
-              api_token: jbtoken,
-              contact_id: jbid,
-              name: "crmStatus",
-              value: "6"
-            }
+    const bodyUpdateVar2 = {
+      api_token: jbtoken,
+      contact_id: jbid,
+      name: 'crmStatus',
+      value: '6',
+    };
 
-    
+    const safeRequest = async (url, body, headers) => {
+      try {
+        return await axios.post(url, body, { headers });
+      } catch (error) {
+        console.error('Request failed:', error.message);
+        return null;
+      }
+    };
 
-            const safeRequest = async (url, body, headers) => {      
-            try {
-              return await axios.post(url, body, { headers });     
-            } catch (error) {
-              console.error('Request failed:', error.message);     
-              return null;
-            }
-          };
+    //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
 
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-        //добавлена задержка между запросами, чтоб JB успел переварить 5 одновременных запросов
+    const response1 = await safeRequest(jburlSetTag, bodySetTag, {
+      'Content-Type': 'application/json',
+    });
+    await delay(1000);
 
-          const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
+      'Content-Type': 'application/json',
+    });
+    await delay(1000);
 
-          const response1 = await safeRequest(jburlSetTag, bodySetTag, {
-            'Content-Type': 'application/json' });
-          await delay(1000);
+    const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
+      'Content-Type': 'application/json',
+    });
 
-          const response2 = await safeRequest(jburlUpdateVar, bodyUpdateVar, {
-            'Content-Type': 'application/json' });
-          await delay(1000);
-          
-          const response3 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
-            'Content-Type': 'application/json' });
+    if (response1 && response1.status >= 200 && response1.status < 300) {
+      console.log('response 1: данные в JB отправлены успешно');
+    } else {
+      console.error('response 1: ошибка отправки данных в JB');
+    }
 
+    if (response2 && response2.status >= 200 && response2.status < 300) {
+      console.log('response 2: данные в JB отправлены успешно');
+    } else {
+      console.error('response 2: ошибка отправки данных в JB');
+    }
 
-          if (response1 && response1.status >= 200 && response1.status < 300 ) {
-                    console.log('response 1: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
+    if (response3 && response3.status >= 200 && response3.status < 300) {
+      console.log('response 3: данные в JB отправлены успешно');
+    } else {
+      console.error('response 3: ошибка отправки данных в JB');
+    }
 
-          if (response2 && response2.status >= 200 && response2.status < 300 ) {
-                    console.log('response 2: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 2: ошибка отправки данных в JB');
-          }
-          
-          if (response3 && response3.status >= 200 && response3.status < 300 ) {
-                    console.log('response 3: данные в JB отправлены успешно');
-          } else {
-                    console.error('response 3: ошибка отправки данных в JB');
-          }
-
-
-          //  await OrdersModel.findOneAndUpdate(
-          //   { _id: orderid }, 
-          //   {
-          //     isUserConfirmDelivery: answerToSet
-          //   },
-          //   { new: true } 
-          // );
+    //  await OrdersModel.findOneAndUpdate(
+    //   { _id: orderid },
+    //   {
+    //     isUserConfirmDelivery: answerToSet
+    //   },
+    //   { new: true }
+    // );
 
     res.status(200).json({
       status: 'changed',
@@ -6190,36 +6285,42 @@ app.post('/api/change_orderInfo', async (req, res) => {
     console.error('Ошибка при изменении статуса crmStatus', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при изменении записи'
+      error: 'Ошибка при изменении записи',
     });
   }
 });
-
-
-
 
 // изменить статус crmStatus (из JB)
 app.post('/api/change_waitadmin', async (req, res) => {
   try {
     const { tlgid, isWaitingAdminAction } = req.body;
 
-    console.log('get from jb | tlgid=',tlgid, ' isWaitingAdminAction=',isWaitingAdminAction)
+    console.log(
+      'get from jb | tlgid=',
+      tlgid,
+      ' isWaitingAdminAction=',
+      isWaitingAdminAction
+    );
 
     // Валидация
-    if (!tlgid || isWaitingAdminAction === undefined || isWaitingAdminAction === null) {
+    if (
+      !tlgid ||
+      isWaitingAdminAction === undefined ||
+      isWaitingAdminAction === null
+    ) {
       return res.status(400).json({
         status: 'error',
-        error: 'tlgid and waitadmin are required'
+        error: 'tlgid and waitadmin are required',
       });
     }
 
-          const updatedUser = await UserModel.findOneAndUpdate(
-            { tlgid: tlgid }, 
-            {
-              isWaitingAdminAction: isWaitingAdminAction
-            },
-            { new: true } 
-          );
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { tlgid: tlgid },
+      {
+        isWaitingAdminAction: isWaitingAdminAction,
+      },
+      { new: true }
+    );
 
     res.status(200).json({
       status: 'changed',
@@ -6228,67 +6329,59 @@ app.post('/api/change_waitadmin', async (req, res) => {
     console.error('Ошибка при изменении параметра isWaitingAdminAction', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка при изменении записи'
+      error: 'Ошибка при изменении записи',
     });
   }
 });
 
-
-
 // изменить статус crmStatus (из JB)
 app.get('/api/get_qty_atbot', async (req, res) => {
   try {
-    
-            // отправить данные в JB
-            const jbtoken = process.env.JB_TOKEN
-            const jbGetContacts = process.env.JB_GET_CONTACTS
-            const jbBotId = process.env.JB_BOTID
-            
+    // отправить данные в JB
+    const jbtoken = process.env.JB_TOKEN;
+    const jbGetContacts = process.env.JB_GET_CONTACTS;
+    const jbBotId = process.env.JB_BOTID;
 
-            const body = {
-              api_token: jbtoken,
-              bot_id: jbBotId
-            }
-  
+    const body = {
+      api_token: jbtoken,
+      bot_id: jbBotId,
+    };
 
-            const safeRequest = async (url, body, headers) => {      
-            try {
-              return await axios.post(url, body, { headers });     
-            } catch (error) {
-              console.error('Request failed:', error.message);     
-              return null;
-            }
-          };
+    const safeRequest = async (url, body, headers) => {
+      try {
+        return await axios.post(url, body, { headers });
+      } catch (error) {
+        console.error('Request failed:', error.message);
+        return null;
+      }
+    };
 
+    const response = await safeRequest(jbGetContacts, body, {
+      'Content-Type': 'application/json',
+    });
 
-          const response = await safeRequest(jbGetContacts, body, {
-            'Content-Type': 'application/json' });
+    let qty = 0;
 
-          let qty = 0  
-
-          if (response && response.status >= 200 && response.status < 300 ) {
-                    console.log('response : данные из JB успешно получены');
-                    qty = response.data.meta.total
-                    console.log('qty=',qty)
-          } else {
-                    console.error('response 1: ошибка отправки данных в JB');
-          }
-
-     
+    if (response && response.status >= 200 && response.status < 300) {
+      console.log('response : данные из JB успешно получены');
+      qty = response.data.meta.total;
+      console.log('qty=', qty);
+    } else {
+      console.error('response 1: ошибка отправки данных в JB');
+    }
 
     res.status(200).json({
       status: 'ok',
-      qty : qty
+      qty: qty,
     });
   } catch (error) {
     console.error('Ошибка в get_qty_atbot', error);
     res.status(400).json({
       status: 'error',
-      error: 'Ошибка в get_qty_atbot'
+      error: 'Ошибка в get_qty_atbot',
     });
   }
 });
-
 
 /////////////////////
 
