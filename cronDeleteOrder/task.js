@@ -36,8 +36,11 @@ export async function executeCheckTask() {
     // 1) Записать сегодняшную дату в переменную todayDate
     const todayDate = new Date();
 
-    // 2) Записать в массив allOrders все объекты
-    const allOrders = await OrdersModel.find();
+    // 2) Записать в массив allOrders все объекты, исключая заказы со статусом 'delivered'
+    const allOrders = await OrdersModel.find({
+      orderStatus: { $ne: '689b8af622baabcbb7047b9e' }
+    });
+
 
     // 3) Пройтись циклом по всем элементам allOrders
     for (const order of allOrders) {
@@ -374,11 +377,30 @@ export async function executeCheckTask() {
         });
 
         console.log('в JB внесены изменения');
-        console.log('response 1', response1.status, response1.statusText);
-        console.log('response 2', response2.status, response2.statusText);
-        console.log('response 3', response3.status, response3.statusText);
-        // console.log('response 4', response4.status , response4.statusText)
-        // console.log('response 5', response5.status , response5.statusText)
+         if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
+          }
+
+
+
+
+
+
+
 
         await OrdersModel.deleteOne({
           _id: order._id,

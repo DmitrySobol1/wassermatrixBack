@@ -176,11 +176,32 @@ app.post(
           const response4 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
             'Content-Type': 'application/json' });
 
-          console.log('отправить обновления в JB 7')
-          console.log('response 1', response1.status , response1.statusText)
-          console.log('response 2', response2.status , response2.statusText)
-          console.log('response 3', response3.status , response3.statusText)
-          console.log('response 4', response4.status , response4.statusText)
+          
+            if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
+          }
+         
+          if (response4 && response4.status >= 200 && response4.status < 300 ) {
+                    console.log('response 4: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 4: ошибка отправки данных в JB');
+          }
+          
+          
           
           await UserModel.findOneAndUpdate(
             { tlgid: updatedOrder.tlgid },
@@ -594,12 +615,41 @@ async function createNewUser(tlgid, jbid, lang) {
   const response5 = await safeRequest(jburlUpdateVar, bodyUpdateVar2, {
     'Content-Type': 'application/json' });
 
-  console.log('в JB: добавить тег notAddGoodAtCart, удалить тег openBot(если он есть) и crmStatus0(если он есть), переменная context=series2_message1 и переменная crmStatus=1')
-  console.log('response 1', response1.status , response1.statusText)
-  console.log('response 2', response2.status , response2.statusText)
-  console.log('response 3', response3.status , response3.statusText)
-  console.log('response 4', response4.status , response4.statusText)
-  console.log('response 5', response5.status , response5.statusText)
+
+   if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
+          }
+         
+          if (response4 && response4.status >= 200 && response4.status < 300 ) {
+                    console.log('response 4: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 4: ошибка отправки данных в JB');
+          }
+          
+          if (response5 && response5.status >= 200 && response5.status < 300 ) {
+                    console.log('response 5: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 5: ошибка отправки данных в JB');
+          }
+         
+          
+
+
+
 
 
 
@@ -2217,13 +2267,46 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
       const response6 = await safeRequest(jburlUpdateVar, bodyUpdateVar3, {
       'Content-Type': 'application/json' });
 
-      console.log('отправка изменений в JB')
-      console.log('response 1', response1.status , response1.statusText)
-      console.log('response 2', response2.status , response2.statusText)
-      console.log('response 3', response3.status , response3.statusText)
-      console.log('response 4', response4.status , response4.statusText)
-      console.log('response 5', response5.status , response5.statusText)
-      console.log('response 6', response6.status , response6.statusText)
+
+        if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
+          }
+         
+          if (response4 && response4.status >= 200 && response4.status < 300 ) {
+                    console.log('response 4: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 4: ошибка отправки данных в JB');
+          }
+          
+          if (response5 && response5.status >= 200 && response5.status < 300 ) {
+                    console.log('response 5: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 5: ошибка отправки данных в JB');
+          }
+         
+          if (response6 && response6.status >= 200 && response6.status < 300 ) {
+                    console.log('response 6: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 6: ошибка отправки данных в JB');
+          }
+  
+
+
+
 
 
 
@@ -2363,12 +2446,39 @@ app.post('/api/user_add_good_tocart', async (req, res) => {
       'Content-Type': 'application/json' })
       ]);
 
-      console.log('отправка изменений в JB')
-      console.log('response 1', response1.status , response1.statusText)
-      console.log('response 2', response2.status , response2.statusText)
-      console.log('response 3', response3.status , response3.statusText)
-      console.log('response 4', response4.status , response4.statusText)
-      console.log('response 5', response5.status , response5.statusText)
+
+      if (response1 && response1.status >= 200 && response1.status < 300 ) {
+                    console.log('response 1: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 1: ошибка отправки данных в JB');
+          }
+
+          if (response2 && response2.status >= 200 && response2.status < 300 ) {
+                    console.log('response 2: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 2: ошибка отправки данных в JB');
+          }
+          
+          if (response3 && response3.status >= 200 && response3.status < 300 ) {
+                    console.log('response 3: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 3: ошибка отправки данных в JB');
+          }
+         
+          if (response4 && response4.status >= 200 && response4.status < 300 ) {
+                    console.log('response 4: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 4: ошибка отправки данных в JB');
+          }
+          
+          if (response5 && response5.status >= 200 && response5.status < 300 ) {
+                    console.log('response 5: данные в JB отправлены успешно');
+          } else {
+                    console.error('response 5: ошибка отправки данных в JB');
+          }
+
+
+
 
 
 
