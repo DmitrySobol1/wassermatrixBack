@@ -6383,6 +6383,37 @@ app.get('/api/get_qty_atbot', async (req, res) => {
   }
 });
 
+
+
+
+// для языка по умолчанию
+app.post('/api/checkingForDefaultLanuage', async (req, res) => {
+  try {
+    const user = await UserModel.findOne({ tlgid: req.body.tlgid });
+
+    if (!user) {
+
+      const userData = {
+        language: 'en',
+      };
+
+
+      return res.json({ userData });
+    }
+
+    
+    const { _id, ...userData } = user._doc;
+    return res.json({ userData });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({
+      message: 'ошибка сервера',
+    });
+  }
+});
+
+
+
 /////////////////////
 
 app.listen(PORT, (err) => {
