@@ -3219,7 +3219,6 @@ app.post('/api/admin_add_new_personal_promocode', async (req, res) => {
 });
 
 // создать новый персональный промокод - за приглашение рефералов
-
 async function createPersonalPromoForReferals(
   tlgidValue,
   saleValue,
@@ -3291,6 +3290,75 @@ async function createPersonalPromoForReferals(
     });
 
     await document.save();
+
+
+
+
+
+
+    const languageReferer = user.language;
+
+                  const text = {
+                    title: {
+                      de: `Sie haben einen neuen persönlichen Promo-Code für ${qtyOfReferals} Empfehlungen`,
+                      en: `<b>You have a new personal promo code for ${qtyOfReferals} referrals</b>`,
+                      ru: `<b>У вас новый персональный промокод за ${qtyOfReferals} рефералов</b>`,
+                    },
+                    subtitle: {
+                      de: `promo-code: <code>${code}</code> \nverkauf: -${saleValue}%`,
+                      en: `promocode: <code>${code}</code> \nsale: -${saleValue}%`,
+                      ru: `промокод: <code>${code}</code> \nскидка: -${saleValue}%`,
+                    },
+                    info: {
+                      de: 'Öffnen Sie die Anwendung, um Ihren Promo-Code zu verwenden.',
+                      en: 'open application to use your promocode',
+                      ru: 'переходите в приложение, что бы воспользовать им при покупке',
+                    },
+
+                    open: {
+                      de: 'öffnen',
+                      en: 'open',
+                      ru: 'открыть',
+                    },
+                  };
+
+                  const btnText = text.open[languageReferer];
+
+                  // Формируем сообщение для отправки в Telegram
+                  const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
+
+                  // Отправляем сообщение через Telegram Bot API
+                  const telegramResponse = await axios.post(
+                    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+                    {
+                      chat_id: tlgid,
+                      text: message,
+                      parse_mode: 'HTML',
+                      reply_markup: {
+                        inline_keyboard: [
+                          [
+                            {
+                              text: btnText,
+                              web_app: {
+                                url: process.env.FRONTEND_URL,
+                              },
+                            },
+                          ],
+                        ],
+                      },
+                    }
+                  );
+
+                  console.log('сообщение рефереру о новом коде, отправлено', tlgid);
+                
+
+
+
+
+
+
+
+
 
     return { status: 'created' };
   } catch (error) {
