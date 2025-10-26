@@ -23,7 +23,7 @@ import ReferalsPromoForPurchaseModel from './models/referals_promoForPurchase.js
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
 
-// для файлов
+// для файлов ыы
 import multer from 'multer';
 
 import cors from 'cors';
