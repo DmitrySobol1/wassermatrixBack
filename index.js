@@ -2106,6 +2106,7 @@ app.post('/api/admin_edit_good', upload.single('file'), async (req, res) => {
           description_long_de,
           description_long_ru,
           price_eu,
+          priceToShow_eu: price_eu,
           delivery_price_de,
           delivery_price_inEu,
           delivery_price_outEu,
