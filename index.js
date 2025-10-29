@@ -23,7 +23,7 @@ import ReferalsPromoForPurchaseModel from './models/referals_promoForPurchase.js
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
 
-// для файлов ыы
+// для файлов
 import multer from 'multer';
 
 import cors from 'cors';
@@ -31,17 +31,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import axios from 'axios';
-import https from 'https';
 
 const PORT = process.env.PORT || 4444;
 
 // Инициализация Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-import { TEXTS } from './texts.js';
-import goods from './models/goods.js';
-
-// const baseurl = `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`;
+import { logger } from './middlewares/error-logger.js';
+import { errorLogger } from './middlewares/error-logger.js';
 
 mongoose
   .connect(process.env.DATABASE_URL)
@@ -549,29 +546,48 @@ app.get('/api', (req, res) => {
   res.send('hello man from shop');
 });
 
+
+
 // вход пользователя в аппку
 app.post('/api/enter', async (req, res) => {
   try {
-    const user = await UserModel.findOne({ tlgid: req.body.tlgid });
+    const { tlgid, jbid, language } = req.body;
 
-    console.log('jbid', req.body.jbid);
+    if (!tlgid || !jbid || !language) {
+      throw new Error('не передан tlgid или jbid или language');
+    }
+
+    const user = await UserModel.findOne({ tlgid: tlgid });
 
     //создание юзера
     if (!user) {
-      await createNewUser(req.body.tlgid, req.body.jbid, req.body.language);
+      // await createNewUser(tlgid, jbid, language);
+
       const userData = {
         result: 'showOnboarding',
-        language: req.body.language,
+        language: language,
       };
 
-      // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку
-      const resp = await ReferalsModel.findOneAndUpdate(
-        { son: req.body.tlgid, isSonEnterToApp: false },
+       // параллельное выполнение для ускорения
+       // создание юзера и 
+       // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку 
+      const [newUser, referal] = await Promise.all([
+      createNewUser(tlgid, jbid, language),
+      ReferalsModel.findOneAndUpdate(
+        { son: tlgid, isSonEnterToApp: false },
         { isSonEnterToApp: true },
         { new: true }
-      );
+      )
+    ]);
 
-      if (resp) {
+      // если юзер чей-то реферал, то пометить, в БД рефералов, что вошел в Аппку
+      // const resp = await ReferalsModel.findOneAndUpdate(
+      //   { son: req.body.tlgid, isSonEnterToApp: false },
+      //   { isSonEnterToApp: true },
+      //   { new: true }
+      // );
+
+      if (referal) {
         const referer = resp.father;
 
         const qtyOfReferals = await ReferalsModel.countDocuments({
@@ -603,29 +619,45 @@ app.post('/api/enter', async (req, res) => {
       return res.json({ userData });
     }
 
+    // if (!user.jbid) {
+    //   // Обновляем jbid для существующего пользователя
+    //   // await UserModel.updateOne(
+    //   //   { tlgid: tlgid },
+    //   //   { jbid: jbid }
+    //   // );
+    // }
+
     if (!user.jbid) {
-      // Обновляем jbid для существующего пользователя
-      await UserModel.updateOne(
-        { tlgid: req.body.tlgid },
-        { jbid: req.body.jbid }
-      );
-      console.log(
-        'Updated jbid for existing user:',
-        req.body.tlgid,
-        'with jbid:',
-        req.body.jbid
-      );
+    // Обновляем jbid для существующего пользователя
+    const updateResult = await UserModel.updateOne(
+      { tlgid: tlgid },
+      { jbid: jbid }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      logger.error({
+        title: 'jbid не обновлен',
+        tlgid: tlgid,
+        jbid: jbid
+      });
+    } else {
+      console.log(`Updated jbid for user ${tlgid}`);
     }
+  }
 
     // извлечь инфо о юзере из БД и передать на фронт действие
     const { _id, ...userData } = user._doc;
     userData.result = 'showCatalogPage';
     return res.json({ userData });
   } catch (err) {
-    console.log(err);
-    res.status(500).json({
-      message: 'ошибка сервера',
+    logger.error({
+      title: 'Ошибка в endpoint /enter',
+      message: err.message,
+      dataFromServer: err.response?.data,
+      statusFromServer: err.response?.status,
     });
+
+    return res.json({ statusBE: 'notOk' });
   }
 });
 
@@ -744,8 +776,14 @@ async function createNewUser(tlgid, jbid, lang) {
     } else {
       console.error('response 5: ошибка отправки данных в JB');
     }
+    return true;
   } catch (err) {
-    console.log(err);
+    logger.error({
+        fn_title:  'ошибка в функции createNewUser',
+        fn_message: err.message,
+        fn_dataFromServer: err.response?.data
+        });
+    return false
   }
 }
 
@@ -3292,74 +3330,60 @@ async function createPersonalPromoForReferals(
 
     await document.save();
 
-
-
-
-
-
     const languageReferer = user.language;
 
-                  const text = {
-                    title: {
-                      de: `Sie haben einen neuen persönlichen Promo-Code für ${qtyOfReferals} Empfehlungen`,
-                      en: `<b>You have a new personal promo code for ${qtyOfReferals} referrals</b>`,
-                      ru: `<b>У вас новый персональный промокод за ${qtyOfReferals} рефералов</b>`,
-                    },
-                    subtitle: {
-                      de: `promo-code: <code>${code}</code> \nverkauf: -${saleValue}%`,
-                      en: `promocode: <code>${code}</code> \nsale: -${saleValue}%`,
-                      ru: `промокод: <code>${code}</code> \nскидка: -${saleValue}%`,
-                    },
-                    info: {
-                      de: 'Öffnen Sie die Anwendung, um Ihren Promo-Code zu verwenden.',
-                      en: 'open application to use your promocode',
-                      ru: 'переходите в приложение, что бы воспользовать им при покупке',
-                    },
+    const text = {
+      title: {
+        de: `Sie haben einen neuen persönlichen Promo-Code für ${qtyOfReferals} Empfehlungen`,
+        en: `<b>You have a new personal promo code for ${qtyOfReferals} referrals</b>`,
+        ru: `<b>У вас новый персональный промокод за ${qtyOfReferals} рефералов</b>`,
+      },
+      subtitle: {
+        de: `promo-code: <code>${code}</code> \nverkauf: -${saleValue}%`,
+        en: `promocode: <code>${code}</code> \nsale: -${saleValue}%`,
+        ru: `промокод: <code>${code}</code> \nскидка: -${saleValue}%`,
+      },
+      info: {
+        de: 'Öffnen Sie die Anwendung, um Ihren Promo-Code zu verwenden.',
+        en: 'open application to use your promocode',
+        ru: 'переходите в приложение, что бы воспользовать им при покупке',
+      },
 
-                    open: {
-                      de: 'öffnen',
-                      en: 'open',
-                      ru: 'открыть',
-                    },
-                  };
+      open: {
+        de: 'öffnen',
+        en: 'open',
+        ru: 'открыть',
+      },
+    };
 
-                  const btnText = text.open[languageReferer];
+    const btnText = text.open[languageReferer];
 
-                  // Формируем сообщение для отправки в Telegram
-                  const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
+    // Формируем сообщение для отправки в Telegram
+    const message = `${text.title[languageReferer]}\n\n${text.subtitle[languageReferer]}\n\n${text.info[languageReferer]}`;
 
-                  // Отправляем сообщение через Telegram Bot API
-                  const telegramResponse = await axios.post(
-                    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
-                    {
-                      chat_id: tlgid,
-                      text: message,
-                      parse_mode: 'HTML',
-                      reply_markup: {
-                        inline_keyboard: [
-                          [
-                            {
-                              text: btnText,
-                              web_app: {
-                                url: process.env.FRONTEND_URL,
-                              },
-                            },
-                          ],
-                        ],
-                      },
-                    }
-                  );
+    // Отправляем сообщение через Telegram Bot API
+    const telegramResponse = await axios.post(
+      `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+      {
+        chat_id: tlgid,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: btnText,
+                web_app: {
+                  url: process.env.FRONTEND_URL,
+                },
+              },
+            ],
+          ],
+        },
+      }
+    );
 
-                  console.log('сообщение рефереру о новом коде, отправлено', tlgid);
-                
-
-
-
-
-
-
-
-
+    console.log('сообщение рефереру о новом коде, отправлено', tlgid);
 
     return { status: 'created' };
   } catch (error) {
@@ -4781,7 +4805,7 @@ app.post('/api/repay_order', async (req, res) => {
 });
 
 // Получить данные пользователя
-app.get('/api/user_get_profile', async (req, res) => {  
+app.get('/api/user_get_profile', async (req, res) => {
   try {
     const { tlgid } = req.query;
 
@@ -4809,7 +4833,7 @@ app.get('/api/user_get_profile', async (req, res) => {
         name: user.name || '',
         phone: user.phone || '',
         adress: user.adress || '', // Keeping original spelling
-        valute: user.valute
+        valute: user.valute,
       },
     });
   } catch (error) {
@@ -6453,25 +6477,19 @@ app.get('/api/get_qty_atbot', async (req, res) => {
   }
 });
 
-
-
-
 // для языка по умолчанию
 app.post('/api/checkingForDefaultLanuage', async (req, res) => {
   try {
     const user = await UserModel.findOne({ tlgid: req.body.tlgid });
 
     if (!user) {
-
       const userData = {
         language: 'en',
       };
 
-
       return res.json({ userData });
     }
 
-    
     const { _id, ...userData } = user._doc;
     return res.json({ userData });
   } catch (err) {
@@ -6482,9 +6500,10 @@ app.post('/api/checkingForDefaultLanuage', async (req, res) => {
   }
 });
 
-
-
 /////////////////////
+
+// all error, кроме тех, что я ловлю сам в try|catch
+app.use(errorLogger);
 
 app.listen(PORT, (err) => {
   if (err) {
@@ -6492,4 +6511,3 @@ app.listen(PORT, (err) => {
   }
   console.log('server SHOP has been started');
 });
- 

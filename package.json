@@ -20,12 +20,14 @@
     "dotenv": "^16.5.0",
     "easy-currencies": "^1.8.3",
     "express": "^5.1.0",
+    "express-winston": "^4.2.0",
     "money": "^0.2.0",
     "mongoose": "^8.14.1",
     "multer": "^2.0.1",
     "node-cron": "^4.0.7",
     "nodemon": "^3.1.10",
-    "stripe": "^18.4.0"
+    "stripe": "^18.4.0",
+    "winston": "^3.18.3"
   },
   "keywords": [],
   "description": ""

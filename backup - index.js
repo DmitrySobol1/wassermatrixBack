@@ -23,7 +23,7 @@ import ReferalsPromoForPurchaseModel from './models/referals_promoForPurchase.js
 import { Convert } from 'easy-currencies';
 import Stripe from 'stripe';
 
-// для файлов
+// для файлов ыы
 import multer from 'multer';
 
 import cors from 'cors';
@@ -2106,6 +2106,7 @@ app.post('/api/admin_edit_good', upload.single('file'), async (req, res) => {
           description_long_de,
           description_long_ru,
           price_eu,
+          priceToShow_eu: price_eu,
           delivery_price_de,
           delivery_price_inEu,
           delivery_price_outEu,
@@ -4780,7 +4781,7 @@ app.post('/api/repay_order', async (req, res) => {
 });
 
 // Получить данные пользователя
-app.get('/api/user_get_profile', async (req, res) => {
+app.get('/api/user_get_profile', async (req, res) => {  
   try {
     const { tlgid } = req.query;
 
@@ -4808,6 +4809,7 @@ app.get('/api/user_get_profile', async (req, res) => {
         name: user.name || '',
         phone: user.phone || '',
         adress: user.adress || '', // Keeping original spelling
+        valute: user.valute
       },
     });
   } catch (error) {
@@ -6490,3 +6492,4 @@ app.listen(PORT, (err) => {
   }
   console.log('server SHOP has been started');
 });
+ 
