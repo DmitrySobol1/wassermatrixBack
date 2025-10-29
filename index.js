@@ -4781,7 +4781,7 @@ app.post('/api/repay_order', async (req, res) => {
 });
 
 // Получить данные пользователя
-app.get('/api/user_get_profile', async (req, res) => {
+app.get('/api/user_get_profile', async (req, res) => {  
   try {
     const { tlgid } = req.query;
 
@@ -4809,6 +4809,7 @@ app.get('/api/user_get_profile', async (req, res) => {
         name: user.name || '',
         phone: user.phone || '',
         adress: user.adress || '', // Keeping original spelling
+        valute: user.valute
       },
     });
   } catch (error) {
