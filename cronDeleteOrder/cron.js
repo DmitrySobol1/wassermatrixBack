@@ -13,7 +13,7 @@ dotenv.config({ path: '/root/wassermatrix/wassermatrixBack/.env' });
 
 
 cron.schedule(
-  '*/2 * * * *',
+  '1 0 * * *',
   async () => {
     console.log('🚀 Запуск CRON2 - checking orders', new Date().toISOString());
 
